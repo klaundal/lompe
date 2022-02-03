@@ -1,0 +1,9 @@
+Directory for scripts for data handling.
+
+Currently handles the following data sets:
+	- DMSP SSUSI (EDR AURORA, netcdf format)
+	- DMSP SSIES (Madrigal)
+	- SuperDARN (gridmap)
+	- SuperMAG (netcdf format)
+	- Iridium (from AMPERE, netcdf format)
+
