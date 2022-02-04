@@ -50,16 +50,9 @@ No pip install yet, so you should use git. Clone the repository like this (the -
 
     git clone https://github.com/klaundal/lompe --recurse-submodules
 
+If you have the repository in a place that Python knows (in the PYTHONPATH environent variable), lompe can be imported as a module
+
 We are developing this actively, so it is a good idea to check for newer versions. To get the latest version do::
 
     git pull --recurse-submodules
 
-If you are *developing* Lompe, and have made changes to a submodule that you want to include, do::
-
-    git submodule foreach git pull
-
-
-
-References
-==========
-Not yet, soon
