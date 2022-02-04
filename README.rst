@@ -46,13 +46,13 @@ You should also have git version >= 2.13
 
 Install
 =======
-No pip install yet, so you should use git. Clone the repository like this (the --recurse-submodules flag must be included)::
+No pip install yet, so you should use git. Clone the repository like this::
 
-    git clone https://github.com/klaundal/lompe --recurse-submodules
+    git clone https://github.com/klaundal/lompe
 
 If you have the repository in a place that Python knows (in the PYTHONPATH environent variable), lompe can be imported as a module
 
 We are developing this actively, so it is a good idea to check for newer versions. To get the latest version do::
 
-    git pull --recurse-submodules
+    git pull
 
