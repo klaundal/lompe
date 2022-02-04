@@ -40,9 +40,6 @@ amperefn = dataloader.read_iridium(event, basepath=basepath, tempfile_path=tempf
 superdarnfn = dataloader.read_sdarn(event, basepath=basepath, tempfile_path=tempfile_path)
 supermagfn = dataloader.read_smag(event, basepath=basepath, tempfile_path=tempfile_path, file_name='20220201-09-27-supermag.netcdf')
 
-# if you want to use the superMAG API, replace above line with the following
-# supermagfn = dataloader.read_smag(event, file_path=tempfile_path, fromfile=False, userid='your_user_id')
-
 # load data files (whole days of data)
 ampere    = pd.read_hdf(amperefn)
 superdarn = pd.read_hdf(superdarnfn)
