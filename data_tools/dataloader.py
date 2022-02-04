@@ -23,12 +23,6 @@ import numpy as np
 d2r = np.pi / 180.
 r2d = 180. / np.pi
 
-'''
-#TODO:
-    - check if the file processed files (pickle) alreadt exists locally before reading the
-      lower level datafiles
-    - Jone: Check TODOs in text
-'''
 
 
 def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
@@ -407,25 +401,6 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
     
     return savefile
 
-#TODO: REMOVE AFTER BRANCHING (SAVE IN DEVELOPMENT BRANCH)
-def read_asi(event, hemi='north', basepath='/Users/jone/BCSS-DAG Dropbox/', \
-            tempfile_path=''):
-    '''
-    event, type: str on format yyyy-mm-dd
-    will load all data from specified hemisphere into xarray object. Any satellite available
-    will be used.
-
-    #Load REGO ASI images
-
-
-    '''
-
-    #Check if the processed file exists
-    savefile = tempfile_path + 'ssusi_'+event+'_'+hemi+'.nc'
-    
-    if os.path.isfile(savefile):
-        
-        return savefile
 
 def read_sdarn(event, basepath = './', tempfile_path = './', hemi = 'north'):
     """
@@ -555,13 +530,14 @@ def read_sdarn(event, basepath = './', tempfile_path = './', hemi = 'north'):
     return savefile
 
 
-def read_smag(event, basepath='./', tempfile_path='./', file_name='', fromfile=True, userid=False, **download_kwargs):
+def read_smag(event, basepath='./', tempfile_path='./', file_name=''):
     """
-    Gets relevant ground magnetometer data from SuperMAG. Either from specified local file
-    or from SuperMAG website using Python API implemented by Simon Walker. 
-    User will need a SuperMAG user-ID to use the API. If you don't have an ID follow: https://supermag.jhuapl.edu/
-    ->click download data and register for an account.
-
+    Gets relevant ground magnetometer data from specified local SuperMAG file: https://supermag.jhuapl.edu/
+    (baseline removed)
+    
+    Filename does not contain date info when downloading netcdf from SuperMAG website manually. User 
+    needs to specify filename.
+    
     Parameters
     ----------
     event : str
@@ -573,16 +549,8 @@ def read_smag(event, basepath='./', tempfile_path='./', file_name='', fromfile=T
         path to already processed SuperMAG files (hdf)
         Default: './'
     file_name : str, optional
-        Name of existing file. Only checked if fromfile=True.
+        Name of existing file.
         Default: ''
-    fromfile : bool, optional
-        Specify if you have netcdf-file already (True) or need to download event data.
-        Default: True
-    userid : str, optional
-        Users SuperMAG ID required for the superMAG API.
-        Default: False
-    **download_kwargs : dict, optional
-        Is passed to SuperMAG API if specified
 
     Returns
     -------
@@ -590,91 +558,52 @@ def read_smag(event, basepath='./', tempfile_path='./', file_name='', fromfile=T
         Path to hdf-file containing SuperMAG data for Lompe.
 
     """
-    '''
-    Filename does not contain date info when downloading netcdf from SuperMAG website manually. User 
-    needs to specify filename.
-    '''
         
     if not basepath.endswith('/'):
         basepath += '/'
     if not tempfile_path.endswith('/'):
         tempfile_path += '/'
-        
-    if fromfile:
-        # check if the processed file exists
-        savefile = tempfile_path + event.replace('-', '') + '_supermag.h5'
-        if os.path.isfile(savefile):
-            return savefile
-        
-        # find netcdf in basepath
-        if not os.path.isfile(basepath + file_name):
-            file_name = event.replace('-', '') + '_supermag.netcdf4'
-        if not os.path.isfile(basepath + file_name):
-            file_name = event.replace('-','') + '_supermag.netcdf'
-        if not os.path.isfile(basepath + file_name):
-            raise FileNotFoundError('Cannot find SuperMAG netcdf in specified folder. Please specify the correct path and file name.')
-        
-        # read netcdf and make hdf for Lompe
-        elif file_name.endswith('.netcdf4') | file_name.endswith('.netcdf'):
-            
-            #From downloaded netcdf file:
-            sm = xr.load_dataset(basepath + file_name, decode_coords = False, engine = 'netcdf4')
-            
-            # convert time columns to datetimes:
-            times = [dt.datetime(*x) for x in zip(sm.time_yr, sm.time_mo, sm.time_dy, sm.time_hr, sm.time_mt)]
-            times = np.array(pd.DatetimeIndex(times)).reshape((-1, 1))
-            times = np.repeat(times, sm.vector.size, axis = 1).flatten()
 
-            df = pd.DataFrame({'Be' : sm.dbe_geo.values.flatten(), 'Bn' : sm.dbn_geo.values.flatten(), 'Bu' : -sm.dbz_geo.values.flatten(),
-                                'lat' : sm.glat.values.flatten(), 'lon' : sm.glon.values.flatten()},
-                                index = times).sort_index()
-            df = df.dropna()
-
-            # save the dataset
-            finishedfile = tempfile_path + event.replace('-','') + '_supermag.h5'
-            df.to_hdf(finishedfile, key = 'df', mode = 'w')
-            print('SuperMAG file saved: ' + finishedfile)
-
-            return finishedfile
-        
-        else:
-            raise ValueError('Something went wrong.')
-    
-    else:       # create SuperMAG datafile through downloading (API)
-        if not userid:
-            raise ValueError('No userid specified for the SuperMAG API please either input your user-ID,' +\
-                             'register an account with SuperMAG or load data from a file.')
-                
-        # import API
-        from .supermag_api import SuperMAGGetInventory, SuperMAGGetData #lompe.data_tools.supermag_api import SuperMAGGetInventory, SuperMAGGetData
-        
-        ind, sites = SuperMAGGetInventory(userid, f"{event[0:4]}-{event[5:7]}-{event[8:10]}T0000", 60*60*24)
-        status, sm_data = SuperMAGGetData(userid, f"{event[0:4]}-{event[5:7]}-{event[8:10]}T0000", 60*60*24, 'GEO', sites, **download_kwargs)
-        
-        sm_data = sm_data[['tval', 'ext', 'iaga', 'glon', 'glat', 'N', 'E', 'Z']].dropna()
-
-        df = pd.DataFrame({'Be':[val['geo'] for val in sm_data.E], 'Bn':[val['geo'] for val in sm_data.N],
-                            'Bu':[-val['geo'] for val in sm_data.Z],
-                            'lat':sm_data.glat.values.flatten(), 'lon':sm_data.glon.values.flatten()},
-                              index = np.datetime64('1970-01-01T00:00')+
-                              sm_data.tval.values.astype('timedelta64[s]')).sort_index()
-        
-        # drop missing values
-        df = df.replace(999999.0, np.nan).dropna()
-        
-        # save the dataset
-        if len(file_name) == 0:
-            file_name = event.replace('-','') + '_supermag.h5'
-        
-        if not file_name.endswith('.h5'):
-            file_name = file_name.split('.')[0] + '.h5'
-        
-        savefile = tempfile_path + file_name
-        df.to_hdf(savefile, key = 'df', mode = 'w')
-        print('SuperMAG file saved: ' + savefile)
-        
+    # check if the processed file exists
+    savefile = tempfile_path + event.replace('-', '') + '_supermag.h5'
+    if os.path.isfile(savefile):
         return savefile
+    
+    # find netcdf in basepath
+    if not os.path.isfile(basepath + file_name):
+        file_name = event.replace('-', '') + '_supermag.netcdf4'
+    if not os.path.isfile(basepath + file_name):
+        file_name = event.replace('-','') + '_supermag.netcdf'
+    if not os.path.isfile(basepath + file_name):
+        raise FileNotFoundError('Cannot find SuperMAG netcdf in specified folder. Please specify the correct path and file name.')
+    
+    # read netcdf and make hdf for Lompe
+    elif file_name.endswith('.netcdf4') | file_name.endswith('.netcdf'):
+        
+        #From downloaded netcdf file:
+        sm = xr.load_dataset(basepath + file_name, decode_coords = False, engine = 'netcdf4')
+        
+        # convert time columns to datetimes:
+        times = [dt.datetime(*x) for x in zip(sm.time_yr, sm.time_mo, sm.time_dy, sm.time_hr, sm.time_mt)]
+        times = np.array(pd.DatetimeIndex(times)).reshape((-1, 1))
+        times = np.repeat(times, sm.vector.size, axis = 1).flatten()
 
+        df = pd.DataFrame({'Be' : sm.dbe_geo.values.flatten(), 'Bn' : sm.dbn_geo.values.flatten(), 'Bu' : -sm.dbz_geo.values.flatten(),
+                            'lat' : sm.glat.values.flatten(), 'lon' : sm.glon.values.flatten()},
+                            index = times).sort_index()
+        df = df.dropna()
+
+        # save the dataset
+        finishedfile = tempfile_path + event.replace('-','') + '_supermag.h5'
+        df.to_hdf(finishedfile, key = 'df', mode = 'w')
+        print('SuperMAG file saved: ' + finishedfile)
+
+        return finishedfile
+    
+    else:
+        raise ValueError('Something went wrong.')
+    
+    
 
 def read_iridium(event, basepath='./', tempfile_path='./', file_name = ''):
     """
