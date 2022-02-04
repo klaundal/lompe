@@ -20,7 +20,7 @@ Development tasks
 - KALLE: Take into account cell distortion in regularization (minimize volume charge density, not sum of line charge densities)
 - KALLE/SIMON - include magnetic coordinates in display
 - KALLE: Run for Nina's dates: 2014-01-21, 2014-12-18, 2014-12-19
-- write paper
+- ~~write paper~~
 
 
 # long-term todo
