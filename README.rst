@@ -41,6 +41,7 @@ You should have the following modules installed:
 - `pydarn <https://github.com/SuperDARN/pydarn>`_ (if you use the SuperDARN data preprocessing helper scripts)
 - madrigalWeb (if you use the DMSP SSIES data preprocessing scripts)
 - `astropy <https://github.com/astropy/astropy>`_ (if you use the AMPERE Iridium data preprocessing scripts)
+- `cdflib <https://github.com/MAVENSDC/cdflib>`_ (for running lompe paper figure example 05)
 You should also have git version >= 2.13
 
 
