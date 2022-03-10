@@ -253,7 +253,7 @@ def hardy(mlat, mlt, kp):
     """
 
     assert kp in [0, 1, 2, 3, 4, 5, 6]
-    mlat, mlt = np.array(mlat, ndmin = 1), np.array(mlt, ndmin = 1)
+    mlat, mlt = np.array(np.abs(mlat), ndmin = 1), np.array(mlt, ndmin = 1)
     shape = np.broadcast(mlat, mlt).shape
     mlat, mlt = mlat.flatten(), mlt.flatten()
 
