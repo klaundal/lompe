@@ -24,6 +24,7 @@ Development tasks
 
 
 # long-term todo
+- model residuals from empirical model to reduce boundary effects (HV's idea)
 - nonlinear solver (solve simultaneously for conductance and electric field)
 - add option to solve for neutral wind
 - do something clever with induced magnetic fields (mirror currents?)
