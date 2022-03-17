@@ -346,17 +346,14 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
     gdalt = interpolate.splev(matplotlib.dates.date2num(dmsp.index), tck)
 
     # calculate bearing angle of cross track direction
-    theta = getbearing(np.abs(gdlat[:-1]), glon[:-1], np.abs(gdlat[1:]), glon[1:])*r2d    #travel bearing in degrees
+    theta = getbearing(gdlat[:-1], glon[:-1], gdlat[1:], glon[1:])*r2d    #travel bearing in degrees
     theta = np.append(theta, np.nan)
     alpha = np.zeros(len(theta))      # rotate to cross-track direction
     
     # correcting angle for negative convection velocity
     negs = dmsp['hor_ion_v'] < 0
-    north = gdlat > 0
-    alpha[north & ~negs] = 90
-    alpha[~north & ~negs] = -90
-    alpha[north & negs] = -90
-    alpha[~north & negs] = 90
+    alpha[~negs] = 90
+    alpha[negs] = -90
     bearing = theta - alpha
     
     negs = bearing < -180
