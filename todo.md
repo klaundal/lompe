@@ -7,6 +7,7 @@ Development tasks
     - minimize gradient
     - boundary condition: HMB
     - Take into account cell distortion in regularization (minimize volume charge density, not sum of line charge densities)
+    - Minimize E dot J instead of charge?
 - JONE + KALLE Conductance ideas:
     - use Knight relation on FACs from previous timestep?
     - use electric field (Cousins / Merkin)
