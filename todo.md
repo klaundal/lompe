@@ -26,6 +26,7 @@ Development tasks
 - KALLE: Visualization - scatter plots of model data misfits
 - KALLE: Plotting tool for cubed sphere projections
 - KALLE: Run for Nina's dates: 2014-01-21, 2014-12-18, 2014-12-19
+- AMALIE: Add function to map convection data
 - ~~write paper~~
 
 
