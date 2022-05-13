@@ -87,8 +87,6 @@ class Data(object):
             'space_mag_fac'  - space magnetic field perturbation with only FAC signal
             'convection'     - F region plasma convection data - mapped to R
             'Efield'         - electric field - mapped to R
-            'Pedersen'       - Pedersen conductance
-            'Hall'           - Hall conductance
         LOS: array, optional
             If the data is line-of-sight (los), indicate the line of sight using a (2, N) 
             array of east, north directions for the N unit vectors pointing in the los
@@ -112,11 +110,11 @@ class Data(object):
         self.isvalid = False
         datatype = datatype.lower()
 
-        if datatype not in ['ground_mag', 'space_mag_full', 'space_mag_fac', 'convection', 'efield', 'fac', 'pedersen', 'hall']:
+        if datatype not in ['ground_mag', 'space_mag_full', 'space_mag_fac', 'convection', 'efield', 'fac']:
             print('datatype not recognized')
             return(None)
 
-        scales = {'ground_mag':100e-9, 'space_mag_full':200e-9, 'space_mag_fac':200e-9, 'convection':100, 'efield':10e-3, 'fac':1e-6, 'pedersen':1, 'hall':1}
+        scales = {'ground_mag':100e-9, 'space_mag_full':200e-9, 'space_mag_fac':200e-9, 'convection':100, 'efield':10e-3, 'fac':1e-6}
 
         if scale is None:
             self.scale = scales[datatype.lower()]
