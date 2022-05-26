@@ -16,8 +16,8 @@ class Data(object):
 
         The data should be given as arrays with shape (M, N), where M is the number of dimensions
         and N is the number of data points. For example, for 3D vector valued data, M is 3, and
-        the rows correspond to the east, north, and up components of the measurements, in that order.
-        See documentation on specific data types for details
+        the rows correspond to the east, north, and up (ENU) components of the measurements, in that order.
+        See documentation on specific data types for details.
 
         The coordinates should be given as arrays with shape (M, N) where M is the number of dimensions
         and N is the number of data points. For example, ground magnetometer data should be provided
@@ -25,27 +25,28 @@ class Data(object):
         two rows. The order of coordinates is: longitude [degrees], latitude [degrees], radius [m]. See
         documentation on specific data types for details. 
 
-        You must specify the data type. Acceptable types are 
+        You must specify the data type. Acceptable types are:
+            
         'ground_mag': Magnetic field perturbations on ground. Unless the components keyword is used, values 
         should be given as (3, N) arrays, with eastward, northward and upward components of the magnetic 
-        field in the three rows, in Tesla. The coordinates should be given as (2, N) arrays with the magnetometers' 
-        longitudes and latitudes in the two rows. The radius is assumed to be Earth radius. An error (measurement 
-        uncertainty) can be given as an N-element array, or as a scalar if the uncertainty is the same for 
-        all data points in the dataset. An alternative way of specifying 'ground_mag', if you do not have 
-        full 3D measurements, is to provide it as (M, N) values, where M <3, and the rows correspond 
+        field perturbation in the three rows, in Tesla. The coordinates should be given as (2, N) arrays with the 
+        magnetometers' longitudes and latitudes in the two rows. The radius is assumed to be Earth radius. An 
+        error (measurement uncertainty) can be given as an N-element array, or as a scalar if the uncertainty is 
+        the same for all data points in the dataset. An alternative way of specifying 'ground_mag', if you do not 
+        have full 3D measurements, is to provide it as (M, N) values, where M < 3, and the rows correspond 
         to the directions that are measured. Specify which directions using the components keyword 
-        (see documentation for that keyword for details)
+        (see documentation for that keyword for details).
 
         'space_mag_fac': Magnetic field perturbations in space associated with field-aligned currents.
         Unless the components keyword is used, values should be given as (3, N) arrays, with eastward, 
-        northward and upward components of the magnetic field in the three rows, in Tesla. Note that the
-        upward component is not used for this parameter, since field-lines are assumed to be radial and 
+        northward and upward components of the magnetic field perturbation in the three rows, in Tesla. Note that 
+        the upward component is not used for this parameter, since field-lines are assumed to be radial and 
         FACs therefore have no vertical field (it must still be given). The coordinates should be given 
         as (3, N) arrays with the longitudes, latitudes, and radii of the measurements in the three rows. 
 
         'space_mag_full': Magnetic field perturbations in space associated with field-aligned currents 
         and horizontal divergence-free currents below the satellite. This is useful for low-flying satellites
-        with accurate magnetometers (e.g., Swarm, CHAMP). The format is the same as for 'space_mag_fac'
+        with accurate magnetometers (e.g., Swarm, CHAMP). The format is the same as for 'space_mag_fac'.
 
         'convection': Ionospheric convection velocity perpendicular to the magnetic field, mapped to the
         ionospheric radius. The values should be given as (2, N) arrays, where the two rows correspond to
@@ -80,17 +81,17 @@ class Data(object):
         coordinates: array
             array of  coordinates - see specific data types for details
         datatype: string
-            datatype should indicate which type of data it is. They can be
+            datatype should indicate which type of data it is. They can be:
             'ground_mag'     - ground magnetic field perturbation (no main field) data
             'space_mag_full' - space magnetic field perturbation with both FAC and
                                divergence-free current signal
             'space_mag_fac'  - space magnetic field perturbation with only FAC signal
-            'convection'     - F region plasma convection data - mapped to R
+            'convection'     - F-region plasma convection data - mapped to R
             'Efield'         - electric field - mapped to R
         LOS: array, optional
-            If the data is line-of-sight (los), indicate the line of sight using a (2, N) 
-            array of east, north directions for the N unit vectors pointing in the los
-            directions. By default, data is assumed to not be line of sight. Note that 
+            if the data is line-of-sight (LOS), indicate the line-of-sight using a (2, N) 
+            array of east, north directions for the N unit vectors pointing in the LOS
+            directions. By default, data is assumed to not be line-of-sight. Note that 
             LOS is only supported for Efield and convection, which are 2D data types. 
         components: int(s), optional
             indicate which components are included in the dataset. If 'all' (default),
@@ -103,7 +104,7 @@ class Data(object):
             typically 100 [m/s], and magnetic field 100e-9 [T]. If not set, a default value is
             used for each dataset.
         error: array of same length as values, or int, optional
-            Measurement error. Used to calculate the data covariance matrix. Use SI units
+            Measurement error. Used to calculate the data covariance matrix. Use SI units.
 
         """
 

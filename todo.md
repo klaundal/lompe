@@ -27,6 +27,8 @@ Development tasks
 - KALLE: Plotting tool for cubed sphere projections
 - KALLE: Run for Nina's dates: 2014-01-21, 2014-12-18, 2014-12-19
 - AMALIE: Add function to map convection data
+- AMALIE: Helper function to get east, north orientation of LOS vector
+- Add height option for magnetometer station coordinates
 - ~~write paper~~
 
 
