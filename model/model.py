@@ -15,7 +15,6 @@ class Emodel(object):
     def __init__(self, grid,
                        Hall_Pedersen_conductance,
                        epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
-                       refh = 110., # apex reference height in km - also used for IGRF altitude
                        dipole = False # set to True to use dipole field and dipole coords
                 ):
         """
@@ -44,8 +43,6 @@ class Emodel(object):
         epoch: float, optional
             Decimal year, used in calculations of IGRF magnetic field and in
             calculation of magnetic coordinates. Set to 2015. by default
-        refh: float, optional
-            Reference height for apex coordinates [km]. Set to 110 by default
         dipole: bool, optional
             Set to True to use dipole magnetic field instead of IGRF. If True, all
             coords are assumed to be dipole coordinates. Useful for idealized calculations.
@@ -60,7 +57,7 @@ class Emodel(object):
         eta_e = np.hstack((self.grid_J.eta_mesh[:, 0], self.grid_J.eta_mesh[-1,   0] + self.grid_J.deta)) - self.grid_J.deta/2 
         self.grid_E = cs.CSgrid(cs.CSprojection(self.grid_J.projection.position, self.grid_J.projection.orientation),
                                self.grid_J.L + self.grid_J.Lres, self.grid_J.W + self.grid_J.Wres, self.grid_J.Lres, self.grid_J.Wres, 
-                               edges = (xi_e, eta_e), R = self.R)
+                               edges = (xi_e, eta_e), R = self.R) # outer
 
         self.lat_J, self.lon_J = np.ravel( self.grid_J.lat ), np.ravel( self.grid_J.lon )
         self.lat_E, self.lon_E = np.ravel( self.grid_E.lat ), np.ravel( self.grid_E.lon )
@@ -79,6 +76,7 @@ class Emodel(object):
         self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance)
 
         # calculate main field values for all grid points
+        refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
         if dipole:
             Bn, Bu = dipole_field(self.lat_E, self.grid_E.R * 1e-3, epoch)
             Be = np.zeros_like(Bn)
