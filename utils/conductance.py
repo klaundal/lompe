@@ -65,10 +65,10 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, c
 
 
 
-def EUV_conductance(sza, f107, hallOrPed,
+def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
                     calibration = 'MoenBrekke1993'):
     """
-    cond = EUV_conductance(sza,f107,hallOrPed,calibration='MoenBrekke1993')
+    cond = EUV_conductance(sza, f107, hallOrPed, calibration='MoenBrekke1993')
 
     Conductance calculated based on the plasma production at the height of max plasma production
     using the Chapman function (which assumes the earth is round, not flat) - and scaled to fit 
@@ -86,13 +86,12 @@ def EUV_conductance(sza, f107, hallOrPed,
     ----------
     sza: 		array
         Solar zenith angle
-    f107: float or array
+    f107: float or array, optional
         F107 index - used to scale EUV conductance
-    hallOrPed: 
-    time: 		datetime
-        time
-    hall_or_pedersen: 	string
-        Must be one of 'h', 'p', or 'hp', (corresponding to "Hall," "Pedersen," or both)  
+        defualt is 100
+    hallOrPed: 	string, optional
+        Must be one of 'h', 'p', or 'hp', (corresponding to "Hall," "Pedersen," or both)
+        default is both
     calibration: string, optional
         calibration to use in EUV_conductance calculation. Should be one of 
         'MoenBrekke1993', 'MoenBrekke1993_alt', 'Cousinsetal2015', with reference to
@@ -109,7 +108,7 @@ def EUV_conductance(sza, f107, hallOrPed,
         Hall conductances for each sza input value
     If hall_or_pedersen == 'p':
         Pedersen conductances for each sza input value
-    If hall_or_pedersen == 'p':
+    If hall_or_pedersen == 'hp':
         Tuple of two arrays, one for Hall and one for Pedersen conductances, for each sza input value
     
 
