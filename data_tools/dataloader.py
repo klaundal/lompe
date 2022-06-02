@@ -23,12 +23,10 @@ import numpy as np
 d2r = np.pi / 180.
 r2d = 180. / np.pi
 
-
-
 def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
     """
     
-    Called and used for modelling auroral conductance in cmodel.py if EUV=True in Cmodel3().
+    Called and used for modelling auroral conductance in cmodel.py.
     
     Extract the relevant SSUSI info from netcdf-files downloaded from APL server.
     https://ssusi.jhuapl.edu/data_products (EDR AURORA)
@@ -197,20 +195,22 @@ def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
 
 def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **madrigal_kwargs):
     """
-    Download DMSP SSIES ion drift meter data for a full day. 
+    Download DMSP SSIES ion drift meter data for a full day and get relevant parameters for Lompe. 
+    Saves hdf file in tempfile_path and returns path
     
     Note that Madrigal needs user specificatyions through **madrigal_kwargs. 
     There is no need to create user beforehand.
     E.g. {'user_fullname' : 'First Last', 'user_email' : 'name@host.com', 'user_affiliation' : 'University'}
     
-    Example usage:
-    ssies = pd.read_hdf(dataloader.read_ssies(event, 17, tempfile_path=tempfile_path, **download_kwargs), mode='r')
+    Example usage for Lompe:
+    fn = dataloader.read_ssies(event, 17, tempfile_path=tempfile_path, **madrigal_kwargs)
+    ssies = pd.read_hdf(fn, mode='r')
     ssies = ssies[(ssies.quality==1) | (ssies.quality==2)]
     ssies = ssies[stime - 2*DT : stime + 2*DT].dropna()
     v_crosstrack = np.abs(ssies.hor_ion_v).values
     coords = np.vstack((ssies.glon.values, ssies.gdlat.values))
     los  = np.vstack((ssies['le'].values, ssies['ln'].values))
-    ssies_data = lompe.Data(v_crosstrack, coords, datatype = 'convection', scale = 500, weights=1, LOS=los)
+    ssies_data = lompe.Data(v_crosstrack, coords, datatype = 'convection', scale = 500, LOS=los)
 
     Parameters
     ----------
@@ -228,7 +228,7 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
         Force the function to download the data even if file exists
         Default: False.
     **madrigalkwargs : dict
-        needed to download from MadrigalWeb
+        needed to download data from MadrigalWeb
         Example: {'user_fullname' : 'First Last', 'user_email' : 'name@host.com', 'user_affiliation' : 'University'}
 
     Returns
@@ -256,12 +256,17 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
     except ModuleNotFoundError:
         raise ModuleNotFoundError('read_ssies requires scipy module.')
     
+        # silence NaturalNameWarnings
+    import warnings
+    from tables import NaturalNameWarning
+    warnings.filterwarnings('ignore', category=NaturalNameWarning)
+    
     # If file does not exist already, we need API to download
     try:
         import madrigalWeb.madrigalWeb  # API, http://cedar.openmadrigal.org/docs/name/rt_contents.html
     except ModuleNotFoundError:
         raise ModuleNotFoundError('read_ssies: Could not import MadrigalWeb module. Will not be able to download DMSP SSIES files.')
-        
+    
     madrigalUrl = 'http://cedar.openmadrigal.org'
     # madrigalUrl = 'http://madrigal.haystack.mit.edu/madrigal'
     try:
@@ -310,11 +315,13 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
     dmsp.index = np.arange(len(dmsp))
     dmsp2.index = np.arange(len(dmsp2))
     
+    # set datetime as index
     times = []
     for i in range(len(dmsp)):
         times.append(dt.datetime.utcfromtimestamp(int(dmsp['ut1_unix'][i])))
     dmsp.index = times
     
+    #reindexing due to lower cadence measurements 
     times2 = []
     for i in range(len(dmsp2)):
         times2.append(dt.datetime.utcfromtimestamp(int(dmsp2['ut1_unix'][i])))
@@ -325,7 +332,7 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
     dmsp.loc[:,'te'] = dmsp2['te']
     dmsp.loc[:,'ti'] = dmsp2['ti']
 
-    #Smooth the orbit
+    # Smooth the orbit
     import matplotlib
     
     # latitude (geodetic)
@@ -344,24 +351,10 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
     tck = interpolate.splrep(matplotlib.dates.date2num(dmsp.index[::60].append(dmsp.index[-1:])), 
                                                        dmsp.gdalt[::60].append(dmsp.gdalt[-1:]).values, k = 2)
     gdalt = interpolate.splev(matplotlib.dates.date2num(dmsp.index), tck)
-
-    # calculate bearing angle of cross track direction
-    theta = getbearing(gdlat[:-1], glon[:-1], gdlat[1:], glon[1:])*r2d    #travel bearing in degrees
-    theta = np.append(theta, np.nan)
-    alpha = np.zeros(len(theta))      # rotate to cross-track direction
     
-    # correcting angle for negative convection velocity
-    negs = dmsp['hor_ion_v'] < 0
-    alpha[~negs] = 90
-    alpha[negs] = -90
-    bearing = theta - alpha
+    # get eastward and northward component of cross track direction
+    le, ln, bearing = cross_track_los(dmsp['hor_ion_v'], gdlat, glon)
     
-    negs = bearing < -180
-    bearing[negs] = bearing[negs] + 360
-    poss = bearing > 180
-    bearing[poss] = bearing[poss] - 360
-    le, ln = np.sin(bearing * d2r), np.cos(bearing * d2r)  # east, north components
-
     # put together the relevant data
     ddd = pd.DataFrame()      # dataframe to return
     ddd.index = dmsp.index
@@ -399,11 +392,12 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
     return savefile
 
 
-def read_sdarn(event, basepath = './', tempfile_path = './', hemi = 'north'):
+def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
     """
     Will load all data from specified day into pandas dataframe. 
     Currently, we use the gridded and cleaned dataset from E. Thomas (downloaded from https://zenodo.org/record/3618607#.YD4KiXVKiEJ )
-
+    Saves hdf file in tempfile_path and returns path
+    
     Parameters
     ----------
     event : str
@@ -495,7 +489,7 @@ def read_sdarn(event, basepath = './', tempfile_path = './', hemi = 'north'):
         
         temp.loc[:,'mlat'] = tt['vector.mlat']              # in degrees AACGM
         temp.loc[:,'mlon'] = tt['vector.mlon']              # in degrees AACGM
-        temp.loc[:,'azimuth'] = tt['vector.kvect']          # in degrees
+        temp.loc[:,'azimuth'] = tt['vector.kvect']          # in degrees, the angle between los and magnetic north
         temp.loc[:,'vlos'] = tt['vector.vel.median']        # in m/s
         temp.loc[:,'vlos_sd'] = tt['vector.vel.sd']         # in m/s
         temp.loc[:,'range'] = tt['vector.pwr.median']       # in km
@@ -507,18 +501,8 @@ def read_sdarn(event, basepath = './', tempfile_path = './', hemi = 'north'):
     ddd.index = ddd.time
 
     # get line-of-sight unit vector in geographic coords
-    ddd['le_m'], ddd['ln_m'] = np.sin(ddd['azimuth'] * d2r), np.cos(ddd['azimuth'] * d2r)
-
-    apex = apexpy.Apex(ddd.index[0], refh = 110)
-    glat, glon, error = apex.apex2geo(ddd['mlat'].values, ddd['mlon'].values, 110)
-    f1, f2 = apex.basevectors_qd(glat, glon, 110, coords = 'geo')
-    ddd['glat'], ddd['glon'] = glat, glon
-
-    # normalize the northward vector, and define a new eastward vector that is perpendicular:
-    f2 = f2 / np.linalg.norm(f2, axis = 0)
-    f1 = np.cross(np.vstack((f2, np.zeros(f2.shape[1]))).T, np.array([[0, 0, 1]])).T[:2]
-
-    ddd['le'], ddd['ln'] = f1 * ddd['le_m'].values.reshape((1, -1)) + f2 * ddd['ln_m'].values.reshape((1, -1))
+    ddd['glat'], ddd['glon'], ddd['le'], ddd['ln'], ddd['le_m'], ddd['ln_m'] = radar_losvec_from_mag(ddd['mlat'].values, 
+                                                      ddd['mlon'].values, ddd['azimuth'].values, ddd.index[0])
     
     # save dataframe for later use
     ddd.to_hdf(savefile, key = 'df', mode = 'w')
@@ -755,3 +739,139 @@ def getbearing(lat0, lon0, lat1, lon1):
     sinaz[small] = sinl0l1[small]*coslt1[small]/sinc[small]
 
     return np.arctan2(sinaz, cosaz)
+
+def cross_track_los(values, glat, glon, return_bearing = True):
+    """
+    Helper function for calculating the line-of-sight of an instrument observing plasma drift
+    in the cross-track direction
+    
+    Uses bearing angle of spacecraft trajectory (trajectory coordinates are glat, glon) and rotates
+    90 degrees to cross-track direction - direction of rotation depeding on sign of measurement
+
+    Parameters
+    ----------
+    values : array
+        values of cross-track ion velocity measurement.
+    glat : array
+        geographic latitude of spacecraft location.
+    glon : array
+        geographic longitude of spacecraft location.
+    return_bearing : bool, optional
+        set to true to return bearing angle of cross-track direction. The default is True.
+
+    Returns
+    -------
+    le : array
+        eastward component of line-of-sight (cross track) unit vector.
+    ln : array
+        northward component of line-of-sight (cross track) unit vector.
+    bearing : array
+        bearing angle of cross-track direction. Returned when return_bearing is set to True.
+
+    """
+
+    # calculate bearing angle of cross track direction
+    theta = getbearing(glat[:-1], glon[:-1], glat[1:], glon[1:]) * r2d    #travel bearing in degrees
+    theta = np.append(theta, np.nan)
+    alpha = np.zeros(len(theta))      # rotate to cross-track direction
+    
+    # correcting angle for negative convection velocity
+    negs = values < 0
+    alpha[~negs] = 90
+    alpha[negs] = -90
+    bearing = theta - alpha
+    
+    negs = bearing < -180
+    bearing[negs] = bearing[negs] + 360
+    poss = bearing > 180
+    bearing[poss] = bearing[poss] - 360
+    le, ln = los_azimuth2en(bearing)  # east, north components
+    
+    if return_bearing:
+        return le, ln, bearing
+    
+    return le, ln
+
+def radar_losvec_from_mag(mlat, mlon, magazimuth, time, refh = 300):
+    """
+    Helper function to calculate line-of-sight unit vector in geographic coords from radar file
+    containing components in magnetic coordinates only. Uses Apexpy for coordinate conversion
+    and vector rotation
+
+    Parameters
+    ----------
+    mlat : array
+        magnetic latitude of observations
+    mlon : array
+        magnetic longitude of observations
+    magazimuth : array
+        magnetic bearing angle of observation (indicating line-of-sight direction)
+    time : timestamp
+        determines IGRF coefficients used for conversion with Apex 
+    refh : int, optional
+        height of observation [km] for coordinate conversion. The default is 300.
+        
+
+    Returns
+    -------
+    glat : array
+        latitude of observations (geographic)
+    glon : array
+        longitude of observations (geographic)
+    le : array
+        eastward component of line-of-sight unit vectors.
+    ln : array
+        northward component of line-of-sight unit vectors.
+    le_m : array
+        magnetic east component of line-of-sight unit vectors.
+    ln_m : array
+        magnetic north component of line-of-sight unit vectors.
+
+    """
+    
+    # local imports
+    try:
+        import apexpy
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError('read_sdarn requires apexpy module.')
+    
+    # line-of-sight east, north magnetic coordinates
+    le_m, ln_m = los_azimuth2en(magazimuth)
+
+    apex = apexpy.Apex(time, refh)
+    glat, glon, _ = apex.apex2geo(mlat, mlon, refh)
+    
+    # find Apex base vectors to rotate los vector from magnetic to geographic
+    f1, f2 = apex.basevectors_qd(glat, glon, refh, coords = 'geo')
+    
+
+    # normalize the northward vector, and define a new eastward vector that is perpendicular:
+    f2 = f2 / np.linalg.norm(f2, axis = 0)
+    f1 = np.cross(np.vstack((f2, np.zeros(f2.shape[1]))).T, np.array([[0, 0, 1]])).T[:2]
+
+    le, ln = f1 * le_m.reshape((1, -1)) + f2 * ln_m.reshape((1, -1))
+    
+    return glat, glon, le, ln, le_m, ln_m
+
+
+def los_azimuth2en(azimuth):
+    """
+    helper function to get east, north line-of-sight unit vector from bearing angle of los direction
+
+    Parameters
+    ----------
+    azimuth : array
+        bearing angle of line-of-sight
+
+    Returns
+    -------
+    le : array
+        eastward component of line-of-sight unit vector.
+    ln : array
+        northward component of line-of-sight unit vector.
+
+    """
+    
+    le, ln = np.sin(azimuth * d2r), np.cos(azimuth * d2r)
+    
+    return le, ln
