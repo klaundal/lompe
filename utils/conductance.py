@@ -12,7 +12,8 @@ from apexpy import Apex
 
 d2r = np.pi/180
 
-def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, calibration = 'MoenBrekke1993', refh = 110):
+def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, 
+              calibration = 'MoenBrekke1993', refh = 110):
     """ calculate conductance at lat, lon for given kp at given time
     based on Hardy model + EUV contribution, from the functions defined below
 
@@ -49,8 +50,7 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, c
         one for total Hall and one for total Pedersen 
     
     """
-    if hall_or_pedersen.lower() not in ['hall', 'h', 'pedersen', 'p', 'hp', 'hallandpedersen']:
-        raise Exception('hardy_EUV: hall_or_pedersen must be either hall or pedersen, or hallandpedersen')
+    assert hall_or_pedersen.lower() in ['hall', 'h', 'pedersen', 'p', 'hp', 'hallandpedersen'], "hardy_EUV: hall_or_pedersen must be either hall or pedersen, or hallandpedersen"
 
     lat, lon = np.array(lat, ndmin = 1), np.array(lon, ndmin = 1)
     shape = np.broadcast(lat, lon).shape
@@ -85,10 +85,10 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, c
 
 
 
-def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
+def EUV_conductance(sza, F107 = 100, hallOrPed = 'hp',
                     calibration = 'MoenBrekke1993'):
     """
-    cond = EUV_conductance(sza, f107, hallOrPed, calibration='MoenBrekke1993')
+    cond = EUV_conductance(sza, F107, hallOrPed, calibration='MoenBrekke1993')
 
     Conductance calculated based on the plasma production at the height of max plasma production
     using the Chapman function (which assumes the earth is round, not flat) - and scaled to fit 
@@ -106,8 +106,8 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
     ----------
     sza: 		array
         Solar zenith angle in degrees
-    f107: float or array, optional
-        F107 index - used to scale EUV conductance
+    F107: float or array, optional
+        F10.7 index - used to scale EUV conductance
         defualt is 100
     hallOrPed: 	string, optional
         Must be one of 'h', 'p', or 'hp', (corresponding to "Hall," "Pedersen," or both)
@@ -135,19 +135,19 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
     Example
     -------
     # Get Hall conductance
-    f107 = 70
+    F107 = 70
     sza = np.arange(0,120.1,0.1)
-    hall = EUV_conductance(sza,f107,'h')
+    hall = EUV_conductance(sza,F107,'h')
 
     # Get Pedersen conductance
-    f107 = 70
+    F107 = 70
     sza = np.arange(0,120.1,0.1)
-    pedersen = EUV_conductance(sza,f107,'p')
+    pedersen = EUV_conductance(sza,F107,'p')
 
     # Get Hall and Pedersen conductance
-    f107 = 70
+    F107 = 70
     sza = np.arange(0,120.1,0.1)
-    hall, pedersen = EUV_conductance(sza,f107,'hp')
+    hall, pedersen = EUV_conductance(sza,F107,'hp')
 
 
     References
@@ -162,7 +162,7 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
     """
     shape = np.array(sza).shape
 
-    assert hallOrPed.lower() in ['h','p','hp'],"Must select one of 'h', 'p', or 'hp' for hallOrPed!"
+    assert hallOrPed.lower() in ['h','p','hp'],"EUV_conductance: Must select one of 'h', 'p', or 'hp' for hallOrPed!"
 
 
     PRODUCTIONFILE = os.path.join(os.path.dirname(__file__), '../data/chapman_euv_productionvalues.txt')
@@ -207,13 +207,13 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
 
         if getH:
             halinterp = interp1d(MODELSZAS,
-                                 f107**(f107hallexponent)*(0.81*PRODUCTION + 0.54*np.sqrt(PRODUCTION)),
+                                 F107**(f107hallexponent)*(0.81*PRODUCTION + 0.54*np.sqrt(PRODUCTION)),
                                  fill_value='extrapolate')
             sigh = halinterp(sza) # moh
 
         if getP:
             pedinterp = interp1d(MODELSZAS,
-                                 f107**(f107pedexponent)*(0.34*PRODUCTION + 0.93*np.sqrt(PRODUCTION)),
+                                 F107**(f107pedexponent)*(0.34*PRODUCTION + 0.93*np.sqrt(PRODUCTION)),
                                  fill_value='extrapolate')
             sigp = pedinterp(sza) # moh
 
@@ -221,13 +221,13 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
 
         if getH:
             halinterp = interp1d(MODELSZAS,
-                                 f107**(f107hallexponent)*HalScl*(PRODUCTION)**(hallexponent),
+                                 F107**(f107hallexponent)*HalScl*(PRODUCTION)**(hallexponent),
                                  fill_value='extrapolate')
             sigh = halinterp(sza) # moh
 
         if getP:
             pedinterp = interp1d(MODELSZAS,
-                                 f107**(f107pedexponent)*PedScl*(PRODUCTION)**(pedexponent),
+                                 F107**(f107pedexponent)*PedScl*(PRODUCTION)**(pedexponent),
                                  fill_value='extrapolate')
             sigp = pedinterp(sza) # moh
 
@@ -271,7 +271,7 @@ def hardy(mlat, mlt, kp):
 
     """
 
-    assert kp in [0, 1, 2, 3, 4, 5, 6]
+    assert kp in [0, 1, 2, 3, 4, 5, 6], "hardy: Kp must be an integer in the range 0-6"
     mlat, mlt = np.array(np.abs(mlat), ndmin = 1), np.array(mlt, ndmin = 1)
     shape = np.broadcast(mlat, mlt).shape
     mlat, mlt = mlat.flatten(), mlt.flatten()

@@ -14,7 +14,7 @@ class Cmodel(object):
 
     def __init__(self, grid, event, stime, param = 'lbhs', factorH = 0.05, factorP = 0.05, 
                        sat = 'F18', basepath = './', tempfile_path = './', how = 'mean',
-                       spline_smoothing = 0, kx = 3, ky = 3, EUV = True, f107 = 70, 
+                       spline_smoothing = 0, kx = 3, ky = 3, EUV = True, F107 = 70, 
                        euvtime = None, filtersize = 2):
         """
         Conductance model, based on combination of precipitation characteristics from SSUSI
@@ -68,7 +68,7 @@ class Cmodel(object):
         EUV : bool, optional 
             Whether to add EUV (solar) conductance
             Default: True
-        f107 : int, optional
+        F107 : int, optional
             F10.7 solar radio flux used to quantify EUV irradiation. Unit: sfu
             Default: 70
         euvtime : datetime object, optional
@@ -94,7 +94,7 @@ class Cmodel(object):
         self.kx = kx
         self.ky = ky
         self.EUV = EUV
-        self.f107 = f107
+        self.f107 = F107
         self.euvtime = euvtime
 
         # do binned average on the specified grid
