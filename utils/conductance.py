@@ -12,56 +12,76 @@ from apexpy import Apex
 
 d2r = np.pi/180
 
-def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, calibration = 'MoenBrekke1993'):
+def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, calibration = 'MoenBrekke1993', refh = 110):
     """ calculate conductance at lat, lon for given kp at given time
     based on Hardy model + EUV contribution, from the functions defined below
 
-    parameters
+    Parameters
     ----------
     lon: array
-        geographic longitudes
+        geographic longitudes [deg]
     lat: array
-        geograhpic latitudes
+        geograhpic latitudes [deg]
     kp: int
         Kp index (used for Hardy model)
     time: datetime
-        time
+        time, used to get solar zenith angles and for apex coordinate conversion
     hall_or_pedersen: string
-        'hall' or 'pedersen'
+        specifies type of conductance, 'hall' or 'pedersen'
     F107: float, optional
-        F107 index - used to scale EUV conductance. Default 100
+        F107 index - used to scale EUV conductance. Default is 100
     starlight: float, optional
         constant to add to conductance
     calibration: string, optional
         calibration to use in EUV_conductance calculation. See documentation
         of EUV_conductance function for info
+    refh: int, optional
+        reference height [km] for coordinate conversion with Apex. Default is 110.
+        
+    Returns
+    -------
+    If hall_or_pedersen == 'hall':
+        Total Hall conductances [mho] for each lat, lon
+    If hall_or_pedersen == 'pedersen':
+        Total Pedersen conductances [mho] for each lat, lon
+    If hall_or_pedersen == 'hallandpedersen' or 'hp':
+        Two arrays of conductances [mho] for each lat, lon, 
+        one for total Hall and one for total Pedersen 
+    
     """
-    if hall_or_pedersen.lower() not in ['hall', 'pedersen']:
-        raise Exception('hardy_EUV: hall_or_pedersen must be either hall or pedersen')
+    if hall_or_pedersen.lower() not in ['hall', 'h', 'pedersen', 'p', 'hp', 'hallandpedersen']:
+        raise Exception('hardy_EUV: hall_or_pedersen must be either hall or pedersen, or hallandpedersen')
 
     lat, lon = np.array(lat, ndmin = 1), np.array(lon, ndmin = 1)
     shape = np.broadcast(lat, lon).shape
     lat, lon = lat.flatten(), lon.flatten()
 
     sza = sunlight.sza(lat, lon, time)
-
-    if hall_or_pedersen.lower() == 'hall':
+        
+    if hall_or_pedersen.lower() in 'hall':
         hop = 'h'
-    if hall_or_pedersen.lower() == 'pedersen':
+    if hall_or_pedersen.lower() in 'pedersen':
         hop = 'p'
+    if hall_or_pedersen.lower() in ['hp', 'hallandpedersen']:
+        hop = 'hp'
+    
+    if len(hop) > 1:
+        EUVh, EUVp = EUV_conductance(sza, F107, hop, calibration = calibration)
+    else:
+        EUV = EUV_conductance(sza, F107, hop, calibration = calibration)
 
-    EUV = EUV_conductance(sza, F107, hop, calibration = calibration)
-
-    a = Apex(time, refh = 110)
-    mlat, mlon = a.geo2apex(lat, lon, 110)
+    a = Apex(time, refh)
+    mlat, mlon = a.geo2apex(lat, lon, refh)
     mlt = a.mlon2mlt(mlon, time)
 
     hc_hall, hc_pedersen = hardy(mlat, mlt, kp)
 
-    if hall_or_pedersen.lower() == 'hall':
+    if hop == 'h':
         return (hc_hall + EUV + starlight).reshape(shape)
-    else:
+    elif hop == 'p':
         return (hc_pedersen + EUV + starlight).reshape(shape)
+    else:
+        return (hc_hall + EUVh + starlight).reshape(shape), (hc_pedersen + EUVp + starlight).reshape(shape)
 
 
 
@@ -85,7 +105,7 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
     Parameters
     ----------
     sza: 		array
-        Solar zenith angle
+        Solar zenith angle in degrees
     f107: float or array, optional
         F107 index - used to scale EUV conductance
         defualt is 100
@@ -105,11 +125,11 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
     Returns
     -------
     If hall_or_pedersen == 'h':
-        Hall conductances for each sza input value
+        Hall conductances [mho] for each sza input value
     If hall_or_pedersen == 'p':
-        Pedersen conductances for each sza input value
+        Pedersen conductances [mho] for each sza input value
     If hall_or_pedersen == 'hp':
-        Tuple of two arrays, one for Hall and one for Pedersen conductances, for each sza input value
+        Tuple of two arrays, one for Hall and one for Pedersen conductances [mho], for each sza input value
     
 
     Example
@@ -189,13 +209,13 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
             halinterp = interp1d(MODELSZAS,
                                  f107**(f107hallexponent)*(0.81*PRODUCTION + 0.54*np.sqrt(PRODUCTION)),
                                  fill_value='extrapolate')
-            sigh = halinterp(sza)
+            sigh = halinterp(sza) # moh
 
         if getP:
             pedinterp = interp1d(MODELSZAS,
                                  f107**(f107pedexponent)*(0.34*PRODUCTION + 0.93*np.sqrt(PRODUCTION)),
                                  fill_value='extrapolate')
-            sigp = pedinterp(sza)
+            sigp = pedinterp(sza) # moh
 
     else:
 
@@ -203,13 +223,13 @@ def EUV_conductance(sza, f107 = 100, hallOrPed = 'hp',
             halinterp = interp1d(MODELSZAS,
                                  f107**(f107hallexponent)*HalScl*(PRODUCTION)**(hallexponent),
                                  fill_value='extrapolate')
-            sigh = halinterp(sza)
+            sigh = halinterp(sza) # moh
 
         if getP:
             pedinterp = interp1d(MODELSZAS,
                                  f107**(f107pedexponent)*PedScl*(PRODUCTION)**(pedexponent),
                                  fill_value='extrapolate')
-            sigp = pedinterp(sza)
+            sigp = pedinterp(sza) # moh
 
 
     if getH and getP:
