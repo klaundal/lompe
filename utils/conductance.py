@@ -246,7 +246,7 @@ def EUV_conductance(sza, F107 = 100, hallOrPed = 'hp',
         return sigp.reshape(shape)
 
 
-def hardy(mlat, mlt, kp):
+def hardy(mlat, mlt, kp, hallOrPed = 'hp'):
     """ calculte Hardy conductivity at given mlat/mlt, for given Kp 
     
     The model is described and defined in:
@@ -263,63 +263,87 @@ def hardy(mlat, mlt, kp):
         magnetic local time in hours
     kp: int
         Kp level, must be in [0, 1, ... 6]
-
+    hallOrPed: str, optional
+        Must be one of 'h', 'p', or 'hp', (corresponding to "Hall," "Pedersen," or both)
+        default is both
+    
     Returns
     -------
     Hall conductance: array
         array of Hall conductance [mho] with shape implied by mlat and mlt
     Peddersen conductance: array
         array of Pedersen conductance [mho] with shape implied by mlat and mlt
+    
+    if hallOrped == 'h':
+        Hall conductance
+    if hallOrped == 'p':
+        Pedersen conductance
+    if hallOrped == 'hp':
+        Hall conductance, Pedersen conductance
 
     """
-
+    assert hallOrPed.lower() in ['h','p','hp'],"hardy: Must select one of 'h', 'p', or 'hp' for hallOrPed!"
     assert kp in [0, 1, 2, 3, 4, 5, 6], "hardy: Kp must be an integer in the range 0-6"
+    
     mlat, mlt = np.array(np.abs(mlat), ndmin = 1), np.array(mlt, ndmin = 1)
     shape = np.broadcast(mlat, mlt).shape
     mlat, mlt = mlat.flatten(), mlt.flatten()
 
     # load hall and pedersen coefficient files:
     basepath = os.path.dirname(__file__)
-
-    hc = pd.read_table(basepath + '/../data/hardy_hall_coefficients.txt'    , sep = ',', skipinitialspace=True, skiprows = [0,])
-    pc = pd.read_table(basepath + '/../data/hardy_pedersen_coefficients.txt', sep = ',', skipinitialspace=True, skiprows = [0,])
-
-    # select only relevant kp:
-    pc = pc[pc.Kp == 'K' + str(kp)]
-    hc = hc[hc.Kp == 'K' + str(kp)]
-
-    # define a dictionary whose keys are the 'term' column values, and values are the corresponding function of mlt
-    pc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in pc['term']]))
-    pc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in pc['term']]    # the const term will be cos, but with n = 0
-    hc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in hc['term']]))
-    hc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in hc['term']]
-
-    # evaluate the fourier series:
-    pedersen_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
-    for row in pc.iterrows():
-        values = row[1]
-        for key in pedersen_epstein:
-            pedersen_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
-
-    hall_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
-    for row in hc.iterrows():
-        values = row[1]
-        for key in hall_epstein:
-            hall_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
-
-    # evaluate the Epstein transition function, Pedersen:
-    r, S1, S2, h0 = pedersen_epstein['maxvalue'], pedersen_epstein['up-slope'], pedersen_epstein['down-slope'], pedersen_epstein['maxlatitude']
-    pedersen_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
-
-    # evaluate the Epstein transition function, Halle:
-    r, S1, S2, h0 = hall_epstein['maxvalue'], hall_epstein['up-slope'], hall_epstein['down-slope'], hall_epstein['maxlatitude']
-    hall_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
-
-    # introduce floors (using recommendation from paper)
-    pedersen_conductance[(mlat < h0) & (pedersen_conductance < 0   )] = 0
-    pedersen_conductance[(mlat > h0) & (pedersen_conductance < 0.55)] = 0.55
-    hall_conductance[    (mlat < h0) & (hall_conductance     < 0   )] = 0
-    hall_conductance[    (mlat > h0) & (hall_conductance     < 0.55)] = 0.55
-
-    return hall_conductance.reshape(shape), pedersen_conductance.reshape(shape)
+    
+    # Hardy for Hall
+    if 'h' in hallOrPed.lower():
+        hc = pd.read_table(basepath + '/../data/hardy_hall_coefficients.txt'    , sep = ',', skipinitialspace=True, skiprows = [0,])
+        hc = hc[hc.Kp == 'K' + str(kp)]     # select only relevant kp
+        
+        # define a dictionary whose keys are the 'term' column values, and values are the corresponding function of mlt
+        hc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in hc['term']]))
+        hc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in hc['term']]
+        
+        # evaluate the fourier series        
+        hall_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
+        for row in hc.iterrows():
+            values = row[1]
+            for key in hall_epstein:
+                hall_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
+        
+        # evaluate the Epstein transition function, Hall:
+        r, S1, S2, h0 = hall_epstein['maxvalue'], hall_epstein['up-slope'], hall_epstein['down-slope'], hall_epstein['maxlatitude']
+        hall_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
+        
+        # introduce floors (using recommendation from paper)
+        hall_conductance[    (mlat < h0) & (hall_conductance     < 0   )] = 0
+        hall_conductance[    (mlat > h0) & (hall_conductance     < 0.55)] = 0.55
+        
+    # Hardy for Pedersen
+    if 'p' in hallOrPed.lower():
+        pc = pd.read_table(basepath + '/../data/hardy_pedersen_coefficients.txt', sep = ',', skipinitialspace=True, skiprows = [0,])
+        pc = pc[pc.Kp == 'K' + str(kp)]     # select only relevant kp
+        
+        # define a dictionary whose keys are the 'term' column values, and values are the corresponding function of mlt
+        pc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in pc['term']]))
+        pc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in pc['term']]    # the const term will be cos, but with n = 0
+        
+        # evaluate the fourier series
+        pedersen_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
+        for row in pc.iterrows():
+            values = row[1]
+            for key in pedersen_epstein:
+                pedersen_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)    
+    
+        # evaluate the Epstein transition function, Pedersen:
+        r, S1, S2, h0 = pedersen_epstein['maxvalue'], pedersen_epstein['up-slope'], pedersen_epstein['down-slope'], pedersen_epstein['maxlatitude']
+        pedersen_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
+        
+        # introduce floors (using recommendation from paper)
+        pedersen_conductance[(mlat < h0) & (pedersen_conductance < 0   )] = 0
+        pedersen_conductance[(mlat > h0) & (pedersen_conductance < 0.55)] = 0.55
+    
+    if hallOrPed.lower() == 'h':
+        return hall_conductance.reshape(shape)
+    elif hallOrPed.lower() == 'p':
+        return pedersen_conductance.reshape(shape)
+    else:
+        return hall_conductance.reshape(shape), pedersen_conductance.reshape(shape)
 
