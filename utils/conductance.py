@@ -16,6 +16,7 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0,
               calibration = 'MoenBrekke1993', refh = 110):
     """ calculate conductance at lat, lon for given kp at given time
     based on Hardy model + EUV contribution, from the functions defined below
+    
 
     Parameters
     ----------
@@ -32,7 +33,8 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0,
     F107: float, optional
         F107 index - used to scale EUV conductance. Default is 100
     starlight: float, optional
-        constant to add to conductance
+        constant to add to conductance, often small (e.g. Strobel et al. 1980 https://doi.org/10.1016/0032-0633(80)90050-1)
+        could be used to include "background-conductance" 
     calibration: string, optional
         calibration to use in EUV_conductance calculation. See documentation
         of EUV_conductance function for info
