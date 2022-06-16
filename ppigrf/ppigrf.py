@@ -39,7 +39,7 @@ date = datetime(2021, 3, 28)
 Be, Bn, Bu = ppigrf.igrf(lon, lat, h, date) # returns east, north, up
 
 # GEOCENTRIC
-r     = 6500 # kilometers from center of Earht
+r     = 6500 # kilometers from center of Earth
 theta = 30   # colatitude in degrees
 phi   = 4    # degrees east (same as lon)
 Br, Btheta, Bphi = ppigrf.igrf_gc(r, theta, phi, date) # returns radial, south, east
@@ -148,7 +148,8 @@ def get_legendre(theta, keys):
     """ 
     Calculate Schmidt semi-normalized associated Legendre functions
 
-    Calculations based on recursive algorithm found in "Spacecraft Attitude Determination and Control" by James Richard Wertz
+    Calculations based on recursive algorithm found in "Spacecraft Attitude Determination 
+    and Control" by James Richard Wertz, doi: 10.1007/978-94-009-9907-7
     
     Parameters
     ----------
@@ -348,7 +349,7 @@ def geoc2geod(theta, r, B_th, B_r):
     """
     Convert from geodetic to geocentric coordinates
 
-    Based on Matlab code by Nils Olsen, DTU
+    Based on MATLAB code by Prof. Nils Olsen, DTU (Technical University of Denmark)
 
     Example:
     --------
@@ -609,7 +610,7 @@ if __name__ == '__main__':
     Be, Bn, Bu = ppigrf.igrf(lon, lat, h, date) # returns east, north, up
 
     # GEOCENTRIC
-    r     = 6500 # kilometers from center of Earht
+    r     = 6500 # kilometers from center of Earth
     theta = 30   # colatitude in degrees
     phi   = 4    # degrees east (same as lon)
     Br, Btheta, Bphi = ppigrf.igrf_gc(r, theta, phi, date) # returns radial, south, east
