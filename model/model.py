@@ -745,7 +745,7 @@ class Emodel(object):
         consistent with the output of self.j(), and could be used to
         check that the model representation is ok. Deviations could be
         due to inaccuracies in the finite difference evaluations, and
-        woudl suggest improving the grid resolution (or the finite
+        would suggest improving the grid resolution (or the finite
         difference code...)
 
         Requires the model vector to be defined.
