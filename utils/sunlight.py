@@ -6,6 +6,8 @@ import numpy as np
 from lompe.utils.time import date_to_doy, is_leapyear
 from lompe.utils.coords import sph_to_car, car_to_sph
 
+d2r = np.pi / 180
+r2d = 180 / np.pi
 
 def subsol(datetimes):
     """ 
@@ -147,7 +149,7 @@ def sza(glat, glon, datetimes, degrees = True):
             raise ValueError('sza: inconsistent input size')
 
     if degrees:
-        conv = 180/np.pi
+        conv = r2d
     else:
         conv = 1.
 
@@ -162,11 +164,11 @@ def sza(glat, glon, datetimes, degrees = True):
     return np.arccos(np.sum(ssr*gcr, axis = 0))*conv
 
 
-
+# TODO: this needs work (AØH 17/06/2022)
 def terminator(datetime, sza = 90, resolution = 360):
     """ compute terminator trajectory (constant solar zenith angle contour)
 
-        glat, glon = compute_terminator(date, sza = 90, resolution = 360)
+        glat, glon = terminator(date, sza = 90, resolution = 360)
 
         sza is the solar zenith angle contour, default 90 degrees
 
@@ -185,8 +187,8 @@ def terminator(datetime, sza = 90, resolution = 360):
 
     sslat, sslon = subsol(datetime)
     #print sslon, sslat
-    sslon = sslon[0]*np.pi/180
-    sslat = sslat[0]*np.pi/180
+    sslon = sslon[0]*d2r
+    sslat = sslat[0]*d2r
 
     # make cartesian vector
     x = np.cos(sslat) * np.cos(sslon)
@@ -205,7 +207,7 @@ def terminator(datetime, sza = 90, resolution = 360):
     sza90 = np.cross(t0, ss)
 
     # rotate this about the duskward vector to get specified SZA contour
-    rotation_angle = -(sza - 90) * np.pi/180
+    rotation_angle = -(sza - 90) * d2r
 
     sza_vector = sza90 * np.cos(rotation_angle) + np.cross(t0, sza90) * np.sin(rotation_angle) + t0 * (np.sum(t0*sza90)) * (1 - np.cos(rotation_angle)) # (rodrigues formula)
     sza_vector = sza_vector.flatten()
