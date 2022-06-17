@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import numpy as np
 from lompe.utils.time import date_to_doy, is_leapyear
-from lompe.utils.coords import sph_to_car
+from lompe.utils.coords import sph_to_car, car_to_sph
 
 
 def subsol(datetimes):
@@ -215,6 +215,6 @@ def terminator(datetime, sza = 90, resolution = 360):
     r = sza_vector[:, np.newaxis] * np.cos(angles) + np.cross(ss, sza_vector)[:, np.newaxis] * np.sin(angles) + ss[:, np.newaxis] * (np.sum(t0*sza90)) * (1 - np.cos(rotation_angle))
 
     # convert to spherical and return
-    tsph = spherical.car_to_sph(r, deg = True)
+    tsph = car_to_sph(r, deg = True)
 
     return 90 - tsph[1], tsph[2]
