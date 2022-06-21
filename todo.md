@@ -25,6 +25,7 @@ Development tasks
 - KALLE/SIMON - include magnetic coordinates in display
 - KALLE: Visualization - scatter plots of model data misfits
 - KALLE: Plotting tool for cubed sphere projections
+- KALLE: Add updated polplot to Lompe
 - KALLE: Run for Nina's dates: 2014-01-21, 2014-12-18, 2014-12-19
 - AMALIE: Add function to map convection data
 - AMALIE: Helper function to get east, north orientation of LOS vector
