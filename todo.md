@@ -29,6 +29,8 @@ Development tasks
 - AMALIE: Add function to map convection data
 - AMALIE: Helper function to get east, north orientation of LOS vector
 - Add height option for magnetometer station coordinates
+- Extend the methods in conductance to have options for coordinate input 
+(magnetic, geographic, etc.) 
 - ~~write paper~~
 
 
