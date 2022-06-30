@@ -364,19 +364,14 @@ class CSprojection(object):
             return Axi, Aeta
 
 
-
-
-    def get_projected_coastlines(self, **kwargs):
+    def get_projected_coastlines(self, mag=False, apex=None, **kwargs):
         """ generate coastlines in projected coordinates """
+        
+        # 
+        coastlinekwargs = {'resolution':'50m', 'category':'physical', 'name':'coastline'}
+        coastlinekwargs.update(kwargs)
 
-        if 'resolution' not in kwargs.keys():
-            kwargs['resolution'] = '50m'
-        if 'category' not in kwargs.keys():
-            kwargs['category'] = 'physical'
-        if 'name' not in kwargs.keys():
-            kwargs['name'] = 'coastline'
-
-        shpfilename = shpreader.natural_earth(**kwargs)
+        shpfilename = shpreader.natural_earth(**coastlinekwargs)
         reader = shpreader.Reader(shpfilename)
         coastlines = reader.records()
         multilinestrings = []
@@ -384,15 +379,20 @@ class CSprojection(object):
             if coastline.geometry.geom_type == 'MultiLineString':
                 multilinestrings.append(coastline.geometry)
                 continue
-            lon, lat = np.array(coastline.geometry.coords[:]).T 
+            lon, lat = np.array(coastline.geometry.coords[:]).T
+            if mag:
+                assert apex is not None, 'an apexpy.Apex object must be provided for coastlines in magnetic coords.'
+                lat, lon = apex.geo2apex(lat, lon, apex.refh) # geographic -> magnetic
             yield self.geo2cube(lon, lat)
 
         for mls in multilinestrings:
             for ls in mls:
                 lon, lat = np.array(ls.coords[:]).T 
+                if mag:
+                    assert apex is not None, 'an apexpy.Apex object must be provided for coaslines in magnetic coords.'
+                    lat, lon = apex.geo2apex(lat, lon, apex.refh) # geographic -> magnetic
                 yield self.geo2cube(lon, lat)
-
-
+                
     def differentials(self, xi, eta, dxi, deta, R = 1):
         """ calculate magnitudes of line and surface elements 
 
