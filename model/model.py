@@ -178,15 +178,15 @@ class Emodel(object):
         self._w = np.empty( 0)
 
         # make expanded grid for calculation of data density:
-        biggrid = cs.CSgrid(self.grid_J.projection,
-                            self.grid_J.L + 2 * perimeter_width * self.grid_J.Lres, self.grid_J.W + 2 * perimeter_width * self.grid_J.Wres,
-                            self.grid_J.Lres, self.grid_J.Wres,
-                            R = self.R )
+        self.biggrid = cs.CSgrid(self.grid_J.projection,
+                                 self.grid_J.L + 2 * perimeter_width * self.grid_J.Lres, self.grid_J.W + 2 * perimeter_width * self.grid_J.Wres,
+                                 self.grid_J.Lres, self.grid_J.Wres,
+                                 R = self.R )
 
         for dtype in self.data.keys(): # loop through data types
             for ds in self.data[dtype]: # loop through the datasets within each data type
                 # skip data points that are outside biggrid:
-                ds = ds.subset(biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
+                ds = ds.subset(self.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
 
                 if 'mag' in dtype:
                     Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
@@ -203,8 +203,8 @@ class Emodel(object):
 
                 # calculate weights based on data density:
                 if data_density_weight:
-                    bincount = biggrid.count(ds.coords['lon'], ds.coords['lat'])
-                    i, j = biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
+                    bincount = self.biggrid.count(ds.coords['lon'], ds.coords['lat'])
+                    i, j = self.biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
                     spatial_weight = 1. / np.maximum(bincount[i, j], 1)
                     spatial_weight[i == -1] = 1
                     if ds.values.ndim == 2: # stack weights for each component in dataset.values:

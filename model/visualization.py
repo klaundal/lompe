@@ -695,6 +695,81 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
         return fig
 
 
+def misfitplot(model, fig_parameters = {}):
+    """
+    Make a scatter plot of lompe model predictions vs input data 
+    """
+    
+    fig, ax = plt.subplots(**fig_parameters)
+
+    # loop through the data objects :
+    counter = 0
+    for dtype in model.data.keys(): # loop through data types
+        for ds in model.data[dtype]: # loop through the datasets within each data type
+            # skip data points that are outside biggrid:
+            ds = ds.subset(model.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
+
+            if 'mag' in dtype:
+                Gs = np.split(model.matrix_func[dtype](**ds.coords), 3, axis = 0)
+                Bs = map(lambda G: G.dot(model.m), Gs)
+                for B, d, sym in zip(Bs, ds.values, ['>', '^', 'o']):
+                    ax.scatter(d/ds.scale, B/ds.scale, marker  = sym, c = 'C0')
+
+
+            if (dtype in ['convection', 'efield']):
+                Ge, Gn = model.matrix_func[dtype](**ds.coords)
+
+                if ds.los is not None: # deal with line of sight data:
+                    G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
+                    ax.scatter(ds.values/ds.scale, G.dot(model.m)/ds.scale, c = 'C1', marker = 'x', zorder = 4)
+                if ds.los is None:
+                    Es = [Ge.dot(m), Gn.dot(m)]
+                    for E, d, sym in zip(Es, ds.values, ['>', '^']):
+                        ax.scatter(d/ds.scale, E/ds.scale, marker  = sym, c = 'C1', zorder = 4)
+
+            extent = np.max(np.abs(np.hstack((ax.get_xlim(), ax.get_ylim()))))
+            ax.set_aspect('equal')
+
+            ax.plot([-extent, extent], [-extent, extent], 'k-', zorder = 7)
+            ax.set_xlim(-extent, extent)
+            ax.set_ylim(-extent, extent)
+
+            ax.plot([0, 0], [-extent, extent], 'k--', zorder = 7)
+            ax.plot([-extent, extent], [0, 0], 'k--', zorder = 7)
+
+            nranges = extent // 2 * 2 # number of unit lenghts for the scale
+
+            ax.plot([extent*.9, extent*.9], [-extent + .1, - extent + .1 + nranges], 'k-', zorder = 7)
+             # scale
+            ax.plot([extent*.89, extent*.91], [-extent + .1]*2, 'k-', zorder = 7)
+            ax.plot([extent*.89, extent*.91], [-extent + .1 + nranges]*2, 'k-', zorder = 7)
+
+
+            if 'mag' in dtype:
+                ax.text(extent * (.9 - counter * .1), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e9))) + ' nT', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
+
+            if dtype == 'convection':
+                ax.text(extent *  (.9 - counter * .1), -extent + .1 + nranges/2, str(int((ds.scale * nranges))) + ' m/s', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
+
+            if dtype == 'efield':
+                ax.text(extent *  (.9 - counter * .1), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e3))) + ' V/m', c = 'C' + str(counter))
+
+            counter += 1
+
+
+    ax.set_axis_off()
+
+    ax.text(0,-extent, 'data', bbox={"facecolor": "white", "linewidth": 0}, zorder=10, va="bottom",ha="center")
+
+    ax.text(-extent, 0, 'model', bbox={"facecolor": "white", "linewidth": 0}, zorder=10, va="center",ha="left", rotation = 90)
+
+
+    ax.set_axis_off()
+
+
+
+
+
 
 class Polarsubplot(object):
     def __init__(self, ax, minlat = 50, plotgrid = True, sector = 'all', **kwargs):
