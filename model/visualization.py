@@ -735,7 +735,7 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
                     G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
                     ax.scatter(ds.values/ds.scale, G.dot(model.m)/ds.scale, c = 'C' + str(counter), marker = 'x', zorder = 4, alpha = .7)
                 if ds.los is None:
-                    Es = [Ge.dot(m), Gn.dot(m)]
+                    Es = [Ge.dot(model.m), Gn.dot(model.m)]
                     for E, d, sym in zip(Es, ds.values, ['>', '^']):
                         ax.scatter(d/ds.scale, E/ds.scale, marker  = sym, c = 'C' + str(counter), zorder = 4, alpha = .7)
 
