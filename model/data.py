@@ -8,7 +8,7 @@ class is defined here.
 import numpy as np
 
 class Data(object):
-    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', scale = None, error = 0):
+    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, scale = None, error = 0):
         """ 
         Initialize Data object that can be passed to the Emodel.add_data function. 
 
@@ -88,6 +88,10 @@ class Data(object):
             'space_mag_fac'  - space magnetic field perturbation with only FAC signal
             'convection'     - F-region plasma convection data - mapped to R
             'Efield'         - electric field - mapped to R
+        label: string, optional
+            A name for the dataset. If not set, the name will be hte same as the
+            datatype. Setting a label can be useful for distinguishing datasets
+            of the same type from different sources (e.g. DMSP and SuperDARN)
         LOS: array, optional
             if the data is line-of-sight (LOS), indicate the line-of-sight using a (2, N) 
             array of east, north directions for the N unit vectors pointing in the LOS
@@ -122,6 +126,7 @@ class Data(object):
         else:
             self.scale = scale
 
+        self.label = datatype if label is None else label
         
         self.datatype = datatype
         self.values = values

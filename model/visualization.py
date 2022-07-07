@@ -695,17 +695,29 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
         return fig
 
 
-def misfitplot(model, fig_parameters = {}):
+def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
     """
     Make a scatter plot of lompe model predictions vs input data 
+
+    parameters
+    ----------
+    model: lompe.Emodel object
+        should contain datasets and a solution vector.
+    fig_parameters: dict
+        parameters passed to the plt.subplots function 
+
+    returns
+    -------
+    ax: matplotlib AxesSubplot object
     """
-    
+
     fig, ax = plt.subplots(**fig_parameters)
 
-    # loop through the data objects :
+    # loop through the data objects and make scatter plots:
     counter = 0
     for dtype in model.data.keys(): # loop through data types
         for ds in model.data[dtype]: # loop through the datasets within each data type
+
             # skip data points that are outside biggrid:
             ds = ds.subset(model.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
 
@@ -713,7 +725,7 @@ def misfitplot(model, fig_parameters = {}):
                 Gs = np.split(model.matrix_func[dtype](**ds.coords), 3, axis = 0)
                 Bs = map(lambda G: G.dot(model.m), Gs)
                 for B, d, sym in zip(Bs, ds.values, ['>', '^', 'o']):
-                    ax.scatter(d/ds.scale, B/ds.scale, marker  = sym, c = 'C0')
+                    ax.scatter(d/ds.scale, B/ds.scale, marker  = sym, c = 'C' + str(counter), alpha = .7)
 
 
             if (dtype in ['convection', 'efield']):
@@ -721,50 +733,68 @@ def misfitplot(model, fig_parameters = {}):
 
                 if ds.los is not None: # deal with line of sight data:
                     G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
-                    ax.scatter(ds.values/ds.scale, G.dot(model.m)/ds.scale, c = 'C1', marker = 'x', zorder = 4)
+                    ax.scatter(ds.values/ds.scale, G.dot(model.m)/ds.scale, c = 'C' + str(counter), marker = 'x', zorder = 4, alpha = .7)
                 if ds.los is None:
                     Es = [Ge.dot(m), Gn.dot(m)]
                     for E, d, sym in zip(Es, ds.values, ['>', '^']):
-                        ax.scatter(d/ds.scale, E/ds.scale, marker  = sym, c = 'C1', zorder = 4)
+                        ax.scatter(d/ds.scale, E/ds.scale, marker  = sym, c = 'C' + str(counter), zorder = 4, alpha = .7)
 
-            extent = np.max(np.abs(np.hstack((ax.get_xlim(), ax.get_ylim()))))
-            ax.set_aspect('equal')
+            counter += 1
 
-            ax.plot([-extent, extent], [-extent, extent], 'k-', zorder = 7)
-            ax.set_xlim(-extent, extent)
-            ax.set_ylim(-extent, extent)
+    extent = np.max(np.abs(np.hstack((ax.get_xlim(), ax.get_ylim()))))
+    ax.set_aspect('equal')
 
-            ax.plot([0, 0], [-extent, extent], 'k--', zorder = 7)
-            ax.plot([-extent, extent], [0, 0], 'k--', zorder = 7)
+    ax.plot([-extent, extent], [-extent, extent], 'k-', zorder = 7)
+    ax.set_xlim(-extent, extent)
+    ax.set_ylim(-extent, extent)
 
-            nranges = extent // 2 * 2 # number of unit lenghts for the scale
+    ax.plot([0, 0], [-1, 1], linestyle = '--', color = 'black', zorder = 7)
+    ax.plot([-1, 1], [0, 0], linestyle = '--', color = 'black', zorder = 7)
 
-            ax.plot([extent*.9, extent*.9], [-extent + .1, - extent + .1 + nranges], 'k-', zorder = 7)
-             # scale
-            ax.plot([extent*.89, extent*.91], [-extent + .1]*2, 'k-', zorder = 7)
-            ax.plot([extent*.89, extent*.91], [-extent + .1 + nranges]*2, 'k-', zorder = 7)
+    nranges = extent // 2 * 2 # number of unit lenghts for the scale
 
+    ax.plot([extent*.9, extent*.9], [-extent + .1, - extent + .1 + nranges], 'k-', zorder = 7)
+     # scale
+    ax.plot([extent*.89, extent*.91], [-extent + .1]*2, 'k-', zorder = 7)
+    ax.plot([extent*.89, extent*.91], [-extent + .1 + nranges]*2, 'k-', zorder = 7)
+
+    ax.set_axis_off()
+
+
+    # loop through the data objects and make labels:
+    counter = 0
+    for dtype in model.data.keys(): # loop through data types
+        for ds in model.data[dtype]: # loop through the datasets within each data type
 
             if 'mag' in dtype:
-                ax.text(extent * (.9 - counter * .1), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e9))) + ' nT', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
+                ax.text(extent * (.9 - counter * .05), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e9))) + ' nT', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
 
             if dtype == 'convection':
-                ax.text(extent *  (.9 - counter * .1), -extent + .1 + nranges/2, str(int((ds.scale * nranges))) + ' m/s', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
+                ax.text(extent *  (.9 - counter * .05), -extent + .1 + nranges/2, str(int((ds.scale * nranges))) + ' m/s', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
 
             if dtype == 'efield':
-                ax.text(extent *  (.9 - counter * .1), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e3))) + ' V/m', c = 'C' + str(counter))
+                ax.text(extent *  (.9 - counter * .05), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e3))) + ' V/m', c = 'C' + str(counter))
+
+            ax.text(-extent + .1, extent -.3 - counter * .25, ds.label, color = 'C' + str(counter), va = 'top', ha = 'left', size = 14)
+
 
             counter += 1
 
 
+
+    # make legend for components:
+    ax.scatter(extent+1, extent+1, marker = '>', c = 'black', label = 'east')
+    ax.scatter(extent+1, extent+1, marker = '^', c = 'black', label = 'north')
+    ax.scatter(extent+1, extent+1, marker = 'o', c = 'black', label = 'up')
+    ax.scatter(extent+1, extent+1, marker = 'x', c = 'black', label = 'line-of-sight')
+    ax.legend(frameon = False, loc='best', bbox_to_anchor=(0.5, 0., 0.5, 0.5))
+
+
+    ax.set_title("Model (y) vs data (x)")
+
     ax.set_axis_off()
 
-    ax.text(0,-extent, 'data', bbox={"facecolor": "white", "linewidth": 0}, zorder=10, va="bottom",ha="center")
-
-    ax.text(-extent, 0, 'model', bbox={"facecolor": "white", "linewidth": 0}, zorder=10, va="center",ha="left", rotation = 90)
-
-
-    ax.set_axis_off()
+    return(ax)
 
 
 
