@@ -454,7 +454,7 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
     elif file.split('.')[-1] == 'map':
         data = SDarn_read.read_map()
     else:
-        print('File has unknown format. Aborting.')
+        print('SuperDARN file has unknown format. Aborting.')
         return None
 
     radars = pydarn.utils.superdarn_radars.SuperDARNRadars() # radar information (site coordniates)
@@ -843,7 +843,6 @@ def radar_losvec_from_mag(mlat, mlon, magazimuth, time, refh = 300):
     
     # find Apex base vectors to rotate los vector from magnetic to geographic
     f1, f2 = apex.basevectors_qd(glat, glon, refh, coords = 'geo')
-    
 
     # normalize the northward vector, and define a new eastward vector that is perpendicular:
     f2 = f2 / np.linalg.norm(f2, axis = 0)
