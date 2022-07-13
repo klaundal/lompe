@@ -21,7 +21,7 @@ from scipy.interpolate import griddata
 from matplotlib import rc
 from matplotlib.patches import Polygon, Ellipse
 from matplotlib.collections import PolyCollection, LineCollection
-from lompe import Polarplot
+from lompe.polplot import Polarplot
 
 rc('font', **{'family': 'sans-serif', 'sans-serif': ['Verdana']})
 rc('text', usetex=False)
