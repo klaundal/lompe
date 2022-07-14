@@ -4,3 +4,6 @@
 [submodule "ppigrf"]
 	path = ppigrf
 	url = https://github.com/klaundal/ppigrf
+[submodule "polplot"]
+	path = polplot
+	url = https://github.com/klaundal/polplot
