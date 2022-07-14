@@ -418,6 +418,12 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
         Path to hdf-file containing SuperDARN data for Lompe.
 
     """
+    
+    assert len(basepath) != 0, 'the path to the SuperDARN file cannot be empty'
+    
+    if len(tempfile_path) == 0:
+        tempfile_path = './'
+        
     if not basepath.endswith('/'):
         basepath += '/'
     if not tempfile_path.endswith('/'):
@@ -442,7 +448,7 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
     # open the file
     file = glob.glob(basepath + event.replace('-','') + '.' + hemi[0] + '*')
     if len(file) == 0:
-        print('SuperDARN data not found.')
+        print('SuperDARN data not found in basepath.')
         return None
     
     else:
