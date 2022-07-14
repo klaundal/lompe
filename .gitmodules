@@ -7,3 +7,6 @@
 [submodule "polplot"]
 	path = polplot
 	url = https://github.com/klaundal/polplot
+[submodule "dipole"]
+	path = dipole
+	url = https://github.com/klaundal/dipole
