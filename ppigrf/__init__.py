@@ -1,1 +1,0 @@
-from .ppigrf import igrf, igrf_gc
