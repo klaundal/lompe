@@ -87,13 +87,13 @@ def plot_coastlines(ax, model, resolution = '110m', **kwargs):
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
 
     if model.dipole:
-        d = Dipole(model.epoch)
+        cd = Dipole(model.epoch)
 
     for cl in model.grid_J.projection.get_projected_coastlines(resolution = resolution):
         xi, eta = cl
         if model.dipole: 
             lon, lat = model.grid.projection.cube2geo(xi, eta) # retrieve geographic coords
-            mlat, mlon = d.geo2mag(lat, lon) # convert to magnetic
+            mlat, mlon = cd.geo2mag(lat, lon) # convert to magnetic
             xi, eta = model.grid.projection.geo2cube(mlon, mlat) # and back to xi, eta
 
         ax.plot(xi, eta, **kwargs)
@@ -133,13 +133,14 @@ def plot_mlt(ax, model, time, apex, mltlevels = np.r_[0:24:3], txtkwargs = None,
         txtkwargs = default_txtkwargs    
 
     mlat, mlon = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, 110)
-    mlt = apex.mlon2mlt(mlon, time)
+    cd = Dipole(apex.year)
+    mlt = cd.mlon2mlt(mlon, time)
     mlat = np.linspace(mlat.min(), mlat.max(), 50)
 
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
 
     for mltlevel in mltlevels:
-        mlon_ = apex.mlt2mlon(mltlevel, time)
+        mlon_ = cd.mlt2mlon(mltlevel, time)
         glat, glon, error = apex.apex2geo(mlat, mlon_, 0)
         iii = model.grid_J.ingrid(glon, glat)
         if np.sum(iii) > 2:
@@ -418,6 +419,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
     """
 
     pax = Polarplot(ax, minlat = 50)
+    cd = Dipole(apex.year)
 
     # coastlines
     if 'resolution' not in clkw.keys():
@@ -440,7 +442,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
     for i, c in enumerate(zip(xs, ys)):
         lon, lat = c
         mlat, mlon = apex.geo2apex(lat, lon, 110)
-        mlt = apex.mlon2mlt(mlon, time)
+        mlt = cd.mlon2mlt(mlon, time)
         pax.plot(mlat, mlt, color = 'black', linewidth = 1.5 if i == 0 else .5, zorder = 2)
 
 
@@ -448,7 +450,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
         V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
         V = V - V.min() - (V.max() - V.min())/2
         mlat, mlon = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, 110)
-        mlt = apex.mlon2mlt(mlon, time)
+        mlt = cd.mlon2mlt(mlon, time)
 
         levels = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
 
