@@ -4,7 +4,7 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline, griddata
 from lompe.secsy import get_SECS_B_G_matrices, get_SECS_J_G_matrices
 from lompe.secsy import cubedsphere as cs
-from lompe.ppigrf import igrf
+from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
 from lompe.utils.dipole import dipole_field
 from .varcheck import check_input
@@ -43,7 +43,7 @@ class Emodel(object):
         epoch: float, optional
             Decimal year, used in calculations of IGRF magnetic field and in
             calculation of magnetic coordinates. Set to 2015. by default
-        dipole: bool, optional
+        dipole: bool or float, optional
             Set to True to use dipole magnetic field instead of IGRF. If True, all
             coords are assumed to be dipole coordinates. Useful for idealized calculations.
             Default is False
@@ -76,8 +76,9 @@ class Emodel(object):
         self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance)
 
         # calculate main field values for all grid points
+        self.dipole = dipole
         refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
-        if dipole:
+        if self.dipole:
             Bn, Bu = dipole_field(self.lat_E, self.grid_E.R * 1e-3, epoch)
             Be = np.zeros_like(Bn)
         else: # use IGRF
@@ -114,7 +115,7 @@ class Emodel(object):
 
         # matrix L that calculates derivative in magnetic eastward direction on grid_E:
         De2, Dn2 = self.grid_E.get_Le_Ln()
-        if dipole: # L matrix gives gradient in eastward direction
+        if self.dipole: # L matrix gives gradient in eastward direction
             self.L = De2
             self.LTL = self.L.T.dot(self.L)
         else: # L matrix gives gradient in QD eastward direction
