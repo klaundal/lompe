@@ -14,7 +14,6 @@ plots.
 
 import matplotlib.pyplot as plt
 import numpy as np
-import cartopy.io.shapereader as shpreader
 import apexpy
 from lompe.utils.sunlight import terminator
 from scipy.interpolate import griddata
@@ -140,39 +139,6 @@ def plot_mlt(ax, model, time, apex, mltlevels = np.r_[0:24:3], txtkwargs = None,
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
-
-
-
-def polarplot_coastline(lon, lat, pax, apex, time, **kwargs):
-    """ plot coastline on mlat / mlt polar plot
-
-    parameters
-    ----------
-    lon: array
-        geographic longitude of coastlines [deg]
-    lat: array
-        geographic latitude of coastlines [deg]
-    pax: Polarplot
-        Polarplot object on which to plot
-    apex: apexpy.Apex object
-        for conversion to magnetic apex coords
-    time: datetime
-        for calculation of magnetic local time
-    kwargs: dict, optional
-        passed to plot
-    """
-    if 'color' not in kwargs.keys():
-        kwargs['color'] = 'lightgrey'
-    if 'linewidth' not in kwargs.keys():
-        kwargs['linewidth'] = 2
-
-    mlat, mlon = apex.geo2apex(lat, lon, 110)
-    mlon[mlat < 50] = np.nan
-    mlat[mlat < 50] = np.nan
-    if np.sum(np.isfinite(mlat)) > 2:
-        mlt = np.full_like(mlon, np.nan)
-        mlt[np.isfinite(mlon)] = apex.mlon2mlt(mlon[np.isfinite(mlon)], time)
-        pax.plot(mlat, mlt, **kwargs)
 
         
 def format_ax(ax, model, apex = None, **kwargs):
@@ -420,7 +386,7 @@ def plot_potential(ax, model, **kwargs):
     return(ax.contour(model.grid_J.xi, model.grid_J.eta, V, **kwargs))
 
 
-def polarplot(ax, model, apex, time, dV = None, clkw = None):
+def polarplot(ax, model, apex, time, dV = None, **clkw):
     """ plot grid and coastlines on mlt/mlat grid
 
     parameters
@@ -433,35 +399,30 @@ def polarplot(ax, model, apex, time, dV = None, clkw = None):
         needed for calculating magnetic coordinates
     time: datetime
         needed for calculation of magnetic local time
-    clkw: dict, optional
-        keywords for shpreader.natural_earth
     dV: int, optional
         set to an integer that represents electric potential
         step size. If not given, electric potential will not be
         shown.
+    clkw: dict, optional
+        keywords for plotting coastlines passed to Polarplot.coastlines()
     """
 
     pax = Polarplot(ax, minlat = 50)
 
-    if clkw == None:
-        clkw = {'resolution':'110m', 'category':'physical', 'name':'coastline'}
-
-    shpfilename = shpreader.natural_earth(**clkw)
-    reader = shpreader.Reader(shpfilename)
-    coastlines = reader.records()
-    multilinestrings = []
-    for coastline in coastlines:
-        if coastline.geometry.geom_type == 'MultiLineString':
-            multilinestrings.append(coastline.geometry)
-            continue
-
-        lon, lat = np.array(coastline.geometry.coords[:]).T 
-        polarplot_coastline(lon, lat, pax, apex, time, zorder = 1)
-
-    for mls in multilinestrings:
-        for ls in mls:
-            lon, lat = np.array(ls.coords[:]).T 
-            polarplot_coastline(lon, lat, pax, apex, time, zorder = 1)
+    # coastlines
+    if 'resolution' not in clkw.keys():
+        resolution = '110m'
+        kwargs = clkw.copy()
+    else:
+        resolution = clkw.pop('resolution')
+        kwargs = clkw.copy()
+    
+    if 'color' not in kwargs.keys():
+        kwargs['color'] = 'lightgrey'
+    if 'linewidth' not in kwargs.keys():
+        kwargs['linewidth'] = 2
+        
+    pax.coastlines(time = time, mag = apex, resolution=resolution, **kwargs)
 
     grid = model.grid_E
     xs = (grid.lon_mesh[0, :], grid.lon_mesh[-1, :], grid.lon_mesh[:, 0], grid.lon_mesh[:, -1])
@@ -482,7 +443,6 @@ def polarplot(ax, model, apex, time, dV = None, clkw = None):
         levels = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
 
         pax.contour(mlat, mlt, V, levels = levels, colors = 'C0', linewidths = 1, zorder = 3)
-
 
 
 def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
@@ -525,7 +485,7 @@ def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
 
 
 def lompeplot(model, figheight = 9, include_data = False, apex = None, time = None, 
-                     savekw = None, clkw = None, quiverscales = None, colorscales = None, 
+                     savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
                      debug = False, return_axes = False):
     """ produce a summary plot of lompe parameters. 
 
@@ -547,7 +507,7 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
         savekw: dictionary, optional
             keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
         clkw: dictionary, optional
-            keywords for shpreader.natural_earth, used to show coastlines in polarplot. Ignored 
+            keywords for Polarplot.coastlines(), used to show coastlines in polarplot. Ignored 
             if apex or time are not specified        
         quiverscales: dict, optional
             dictionary of scales (in inches) to use for quiver plots. keys must be valid datatype. 
@@ -645,7 +605,7 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
     # ---------
     if time != None and apex != None:
         ax = plt.subplot2grid((20, 4), (0, 3), rowspan = 10) 
-        polarplot(ax, model, apex, time, dV = 5, clkw = clkw)
+        polarplot(ax, model, apex, time, dV = 5, **clkw)
 
     # Make scales
     #------------
