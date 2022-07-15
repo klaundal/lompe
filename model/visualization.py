@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import apexpy
 from lompe.utils.sunlight import terminator
+from lompe.dipole import Dipole
 from scipy.interpolate import griddata
 from matplotlib import rc
 from matplotlib.patches import Polygon, Ellipse
@@ -81,12 +82,21 @@ def plot_coastlines(ax, model, resolution = '110m', **kwargs):
         model object that contains the dataset
     """
 
-
     if 'color' not in kwargs.keys():
         kwargs['color'] = 'black'
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
+
+    if model.dipole:
+        d = Dipole(model.epoch)
+
     for cl in model.grid_J.projection.get_projected_coastlines(resolution = resolution):
-        ax.plot(cl[0], cl[1], **kwargs)
+        xi, eta = cl
+        if model.dipole: 
+            lon, lat = model.grid.projection.cube2geo(xi, eta) # retrieve geographic coords
+            mlat, mlon = d.geo2mag(lat, lon) # convert to magnetic
+            xi, eta = model.grid.projection.geo2cube(mlon, mlat) # and back to xi, eta
+
+        ax.plot(xi, eta, **kwargs)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
