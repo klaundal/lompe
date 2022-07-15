@@ -6,7 +6,7 @@ from lompe.secsy import get_SECS_B_G_matrices, get_SECS_J_G_matrices
 from lompe.secsy import cubedsphere as cs
 from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
-from lompe.utils.dipole import dipole_field
+from lompe.dipole import Dipole
 from .varcheck import check_input
 
 RE = 6371.2e3 # Earth radius in meters
@@ -77,12 +77,13 @@ class Emodel(object):
 
         # calculate main field values for all grid points
         self.dipole = dipole
+        self.epoch = epoch
         refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
         if self.dipole:
-            Bn, Bu = dipole_field(self.lat_E, self.grid_E.R * 1e-3, epoch)
+            Bn, Bu = Dipole(self.epoch).B(self.lat_E, self.grid_E.R * 1e-3)
             Be = np.zeros_like(Bn)
         else: # use IGRF
-            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, refh, yearfrac_to_datetime([epoch]))
+            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, refh, yearfrac_to_datetime([self.epoch]))
         Be, Bn, Bu = Be * 1e-9, Bn * 1e-9, Bu * 1e-9 # nT -> T
         self.B0 = np.sqrt(Be**2 + Bn**2 + Bu**2).reshape((1, -1))
         self.Bu = Bu.reshape((1, -1))
