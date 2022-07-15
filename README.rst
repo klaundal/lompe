@@ -47,9 +47,18 @@ You should also have git version >= 2.13
 
 Install
 =======
-No pip install yet, so you should use git. Clone the repository like this::
+No pip install yet, so you should use git. But you'll need to install a module called ppigrf, which calculates IGRF values. That can be done like this::
+
+    pip install ppigrf
+
+Clone the repository like this::
 
     git clone https://github.com/klaundal/lompe
+
+Then, to get the code for the submodules, run::
+
+    git submodule init
+    git submodule update
 
 If you have the repository in a place that Python knows (in the PYTHONPATH environent variable), lompe can be imported as a module
 
@@ -57,3 +66,7 @@ We are developing this actively, so it is a good idea to check for newer version
 
     git pull
 
+
+Lompe papers
+============
+Main Lompe paper that describes the technique: `Local Mapping of Polar Ionospheric Electrodynamics <https://doi.org/10.1029/2022JA030356>`_
