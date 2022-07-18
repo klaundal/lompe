@@ -27,8 +27,8 @@ SOFTWARE.
 
 import numpy as np
 import pandas as pd
-from lompe.ppigrf.ppigrf import read_shc
-from .coords import car_to_sph, sph_to_car, enu_to_ecef, ecef_to_enu
+from ppigrf import read_shc
+from lompe.dipole.dipole import car_to_sph, sph_to_car, enu_to_ecef, ecef_to_enu
 
 RE = 6371.2 # reference radius in km
 
