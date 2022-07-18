@@ -309,7 +309,7 @@ class load_model(object):
         import xarray as xr
         self.grid1_dataset= xr.load_dataset(path+'grid1.ncdf4', engine='netcdf4')
         self.grid2_dataset= xr.load_dataset(path+'grid2.ncdf4', engine='netcdf4')
-        from secsy import cubedsphere as cs 
+        from lompe.secsy import cubedsphere as cs 
         self.grid= cs.CSgrid(cs.CSprojection(**self.grid2_dataset.attrs), **self.grid1_dataset.attrs)
         xi_e  = np.hstack((self.grid.xi_mesh[0]    , self.grid.xi_mesh [0 , - 1] + self.grid.dxi )) - self.grid.dxi /2 
         eta_e = np.hstack((self.grid.eta_mesh[:, 0], self.grid.eta_mesh[-1,   0] + self.grid.deta)) - self.grid.deta/2 
