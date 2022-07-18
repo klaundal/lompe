@@ -92,9 +92,9 @@ def plot_coastlines(ax, model, resolution = '110m', **kwargs):
     for cl in model.grid_J.projection.get_projected_coastlines(resolution = resolution):
         xi, eta = cl
         if model.dipole: 
-            lon, lat = model.grid.projection.cube2geo(xi, eta) # retrieve geographic coords
+            lon, lat = model.grid_J.projection.cube2geo(xi, eta) # retrieve geographic coords
             mlat, mlon = cd.geo2mag(lat, lon) # convert to magnetic
-            xi, eta = model.grid.projection.geo2cube(mlon, mlat) # and back to xi, eta
+            xi, eta = model.grid_J.projection.geo2cube(mlon, mlat) # and back to xi, eta
 
         ax.plot(xi, eta, **kwargs)
     ax.set_xlim(xlim)
