@@ -10,6 +10,10 @@ is to be used with lompe.
 Helpers
 ----------
     - getbearing
+    - cross_track_los
+    - radar_losvec_from_mag
+    - los_azimuth2en
+    
 """
 
 import glob
