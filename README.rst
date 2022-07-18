@@ -35,7 +35,7 @@ You should have the following modules installed:
 - scipy
 - matplotlib
 - `apexpy <https://github.com/aburrell/apexpy>`_
-- ppigrf
+- `ppigrf <https://github.com/klaundal/ppigrf>`_
 - xarray
 - netCDF4 (if you use the DMSP SSUSI preprocessing scripts)
 - `pydarn <https://github.com/SuperDARN/pydarn>`_ (if you use the SuperDARN data preprocessing helper scripts)
