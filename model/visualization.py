@@ -417,7 +417,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
     clkw: dict, optional
         keywords for plotting coastlines passed to Polarplot.coastlines()
     """
-
+    
     pax = Polarplot(ax, minlat = 50)
     cd = Dipole(apex.year)
 
@@ -441,20 +441,22 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
     ys = (grid.lat_mesh[0, :], grid.lat_mesh[-1, :], grid.lat_mesh[:, 0], grid.lat_mesh[:, -1])
     for i, c in enumerate(zip(xs, ys)):
         lon, lat = c
-        mlat, mlon = apex.geo2apex(lat, lon, 110)
-        mlt = cd.mlon2mlt(mlon, time)
-        pax.plot(mlat, mlt, color = 'black', linewidth = 1.5 if i == 0 else .5, zorder = 2)
-
+        if not model.dipole:    
+            lat, lon = apex.geo2apex(lat, lon, 110)   # to magnetic apex
+        mlt = cd.mlon2mlt(lon, time)
+        pax.plot(lat, mlt, color = 'black', linewidth = 1.5 if i == 0 else .5, zorder = 2)
 
     if dV != None: # plot electric potential
         V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
         V = V - V.min() - (V.max() - V.min())/2
-        mlat, mlon = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, 110)
-        mlt = cd.mlon2mlt(mlon, time)
+        lat, lon = model.grid_J.lat, model.grid_J.lon
+        if not model.dipole:
+            lat, lon = apex.geo2apex(lat, lon, 110)   # to magnetic apex
+        mlt = cd.mlon2mlt(lon, time)
 
         levels = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
 
-        pax.contour(mlat, mlt, V, levels = levels, colors = 'C0', linewidths = 1, zorder = 3)
+        pax.contour(lat, mlt, V, levels = levels, colors = 'C0', linewidths = 1, zorder = 3)
 
 
 def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
