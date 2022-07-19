@@ -48,6 +48,7 @@ COLORSCALES =  {'fac':        np.linspace(-1.95, 1.95, 40) * 1e-6 * 2,
 # Default color map:
 CMAP = plt.cm.magma
 
+RE = 6371.2e3 # Earth radius in meters
 
 # Number of arrows to plot along smallest dimension:
 NN = 12 
@@ -132,19 +133,26 @@ def plot_mlt(ax, model, time, apex, mltlevels = np.r_[0:24:3], txtkwargs = None,
         default_txtkwargs.update(txtkwargs)
         txtkwargs = default_txtkwargs    
 
-    mlat, mlon = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, 110)
+            
+    if model.dipole:
+        mlat, mlon = model.grid_J.lat, model.grid_J.lon
+    else:
+        mlat, mlon = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, (model.R-RE)*1e-3) # to magnetic
+    
     cd = Dipole(apex.year)
     mlt = cd.mlon2mlt(mlon, time)
     mlat = np.linspace(mlat.min(), mlat.max(), 50)
 
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
-
     for mltlevel in mltlevels:
         mlon_ = cd.mlt2mlon(mltlevel, time)
-        glat, glon, error = apex.apex2geo(mlat, mlon_, 0)
-        iii = model.grid_J.ingrid(glon, glat)
+        if model.dipole:
+            lat, lon = mlat, np.ones(mlat.shape)*mlon_
+        else:
+            lat, lon, _ = apex.apex2geo(mlat, mlon_, 0)
+        iii = model.grid_J.ingrid(lon, lat)
         if np.sum(iii) > 2:
-            xi, eta = model.grid_J.projection.geo2cube(glon[iii], glat[iii])
+            xi, eta = model.grid_J.projection.geo2cube(lon[iii], lat[iii]) # to xi, eta
             ax.plot(xi, eta, **kwargs)
             ax.text(xi[len(xi)//2], eta[len(xi)//2], str(np.int32(mltlevel)).zfill(2), **txtkwargs)
 
@@ -162,17 +170,19 @@ def format_ax(ax, model, apex = None, **kwargs):
     model: lompe.Model object
         model to get grid from
     apex: apexpy.Apex object, optional
-        If given, magnetic latitude contours will be plotted.
+        If given, apex magnetic latitude contours will be plotted.
         If not (default), geograhpic latitude contours will be shown
     kwargs: optional
         passed to contour, which is used to plot latitude contours
     """ 
-
-    if apex != None:
-        lat, lon = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, 110)
+    
+    if not model.dipole and (apex != None):
+        lat, _ = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, (model.R-RE)*1e-3)
+    elif model.dipole:
+        lat = model.grid_J.lat
     else:
         lat = model.grid_J.lat
-
+    
     if 'levels' not in kwargs.keys():
         kwargs['levels'] = np.r_[-85:89:5]
     if 'colors' not in kwargs.keys():
@@ -442,7 +452,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
     for i, c in enumerate(zip(xs, ys)):
         lon, lat = c
         if not model.dipole:    
-            lat, lon = apex.geo2apex(lat, lon, 110)   # to magnetic apex
+            lat, lon = apex.geo2apex(lat, lon, (model.R-RE)*1e-3)   # to magnetic apex
         mlt = cd.mlon2mlt(lon, time)
         pax.plot(lat, mlt, color = 'black', linewidth = 1.5 if i == 0 else .5, zorder = 2)
 
@@ -451,7 +461,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
         V = V - V.min() - (V.max() - V.min())/2
         lat, lon = model.grid_J.lat, model.grid_J.lon
         if not model.dipole:
-            lat, lon = apex.geo2apex(lat, lon, 110)   # to magnetic apex
+            lat, lon = apex.geo2apex(lat, lon, (model.R-RE)*1e-3)   # to magnetic apex
         mlt = cd.mlon2mlt(lon, time)
 
         levels = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
