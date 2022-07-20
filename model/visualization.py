@@ -15,7 +15,6 @@ plots.
 import matplotlib.pyplot as plt
 import numpy as np
 import apexpy
-from lompe.utils.sunlight import terminator
 from lompe.dipole import Dipole
 from scipy.interpolate import griddata
 from matplotlib import rc
@@ -759,7 +758,7 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
             if dtype == 'efield':
                 ax.text(extent *  (.9 - counter * .05), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e3))) + ' V/m', c = 'C' + str(counter))
 
-            ax.text(-extent + .1, extent -.3 - counter * .25, ds.label, color = 'C' + str(counter), va = 'top', ha = 'left', size = 14)
+            ax.text(-extent + .1, extent -.3 - counter * .25, ds.label.replace('_',' '), color = 'C' + str(counter), va = 'top', ha = 'left', size = 14)
 
 
             counter += 1
