@@ -1,19 +1,16 @@
-"""
-Conductance functions
-
-"""
+""" Conductance functions"""
 
 import numpy as np
 import pandas as pd
 import os
 from scipy.interpolate import interp1d
 from lompe.utils import sunlight
-from apexpy import Apex
+from lompe.dipole.dipole import Dipole
 
 d2r = np.pi/180
 
-def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, 
-              calibration = 'MoenBrekke1993', refh = 110):
+def hardy_EUV(lon, lat, kp, time, hall_or_pedersen ='hp', starlight = 0, F107 = 100,
+              dipole=False, calibration = 'MoenBrekke1993'):
     """ calculate conductance at lat, lon for given kp at given time
     based on Hardy model + EUV contribution, from the functions defined below
     
@@ -30,16 +27,16 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0,
         time, used to get solar zenith angles and for apex coordinate conversion
     hall_or_pedersen: string
         specifies type of conductance, 'hall' or 'pedersen'
-    F107: float, optional
-        F107 index - used to scale EUV conductance. Default is 100
     starlight: float, optional
         constant to add to conductance, often small (e.g. Strobel et al. 1980 https://doi.org/10.1016/0032-0633(80)90050-1)
         could be used to include "background-conductance" 
+    F107: float, optional
+        F107 index - used to scale EUV conductance. Default is 100
+    dipole : bool, optional
+        set to True if lat and lon are dipole coordinates. Default is False
     calibration: string, optional
         calibration to use in EUV_conductance calculation. See documentation
         of EUV_conductance function for info
-    refh: int, optional
-        reference height [km] for coordinate conversion with Apex. Default is 110.
         
     Returns
     -------
@@ -53,11 +50,20 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0,
     
     """
     assert hall_or_pedersen.lower() in ['hall', 'h', 'pedersen', 'p', 'hp', 'hallandpedersen'], "hardy_EUV: hall_or_pedersen must be either hall or pedersen, or hallandpedersen"
-
+    
     lat, lon = np.array(lat, ndmin = 1), np.array(lon, ndmin = 1)
     shape = np.broadcast(lat, lon).shape
     lat, lon = lat.flatten(), lon.flatten()
-
+    
+    cd = Dipole(time.year)       
+    if dipole:
+        mlat, mlon = lat, lon # input lat, lon is centered dipole
+        lat, lon = cd.mag2geo(lat, lon) # to geographic
+    else:
+        mlat, mlon = cd.geo2mag(lat, lon) # to mag
+    mlt = cd.mlon2mlt(mlon, time)     # get mlt
+    
+    # solar zenith angles for EUV conductances
     sza = sunlight.sza(lat, lon, time)
         
     if hall_or_pedersen.lower() in 'hall':
@@ -71,11 +77,8 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0,
         EUVh, EUVp = EUV_conductance(sza, F107, hop, calibration = calibration)
     else:
         EUV = EUV_conductance(sza, F107, hop, calibration = calibration)
-
-    a = Apex(time, refh)
-    mlat, mlon = a.geo2apex(lat, lon, refh)
-    mlt = a.mlon2mlt(mlon, time)
-
+    
+    # auroral conductances
     hc_hall, hc_pedersen = hardy(mlat, mlt, kp)
 
     if hop == 'h':
@@ -282,7 +285,7 @@ def hardy(mlat, mlt, kp, hallOrPed = 'hp'):
         Hall conductance, Pedersen conductance
 
     """
-    assert hallOrPed.lower() in ['h','p','hp'],"hardy: Must select one of 'h', 'p', or 'hp' for hallOrPed!"
+    assert hallOrPed.lower() in ['h','p','hp'], "hardy: Must select one of 'h', 'p', or 'hp' for hallOrPed!"
     assert kp in [0, 1, 2, 3, 4, 5, 6], "hardy: Kp must be an integer in the range 0-6"
     
     mlat, mlt = np.array(np.abs(mlat), ndmin = 1), np.array(mlt, ndmin = 1)
