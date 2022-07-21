@@ -40,7 +40,7 @@ You should have the following modules installed:
 - `astropy <https://github.com/astropy/astropy/>`_ (if you use the AMPERE Iridium data preprocessing scripts)
 - `cdflib <https://github.com/MAVENSDC/cdflib/>`_ (for running lompe paper figures example 05)
 - `madrigalWeb <https://pypi.org/project/madrigalWeb/>`_ (if you use the DMSP SSIES data preprocessing scripts)
-- `netCDF4 <https://github.com/Unidata/netcdf4-python/>´_ (if you use the DMSP SSUSI data preprocessing scripts)
+- `netCDF4 <https://github.com/Unidata/netcdf4-python/>`_ (if you use the DMSP SSUSI data preprocessing scripts)
 - `pyAMPS <https://github.com/klaundal/pyAMPS/>`_ (for running code paper figures example 08)
 - `pydarn <https://github.com/SuperDARN/pydarn/>`_ (if you use the SuperDARN data preprocessing scripts)
 
