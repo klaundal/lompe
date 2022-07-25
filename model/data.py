@@ -20,7 +20,7 @@ class Data(object):
         See documentation on specific data types for details.
 
         The coordinates should be given as arrays with shape (M, N) where M is the number of dimensions
-        and N is the number of data points. For example, ground magnetometer data should be provided
+        and N is the number of data points. For example, ground magnetometer data can be provided
         with a (2, N) coordinate array with N values for the longitude and latitude, in degrees in the
         two rows. The order of coordinates is: longitude [degrees], latitude [degrees], radius [m]. See
         documentation on specific data types for details. 
@@ -29,13 +29,14 @@ class Data(object):
             
         'ground_mag': Magnetic field perturbations on ground. Unless the components keyword is used, values 
         should be given as (3, N) arrays, with eastward, northward and upward components of the magnetic 
-        field perturbation in the three rows, in Tesla. The coordinates should be given as (2, N) arrays with the 
-        magnetometers' longitudes and latitudes in the two rows. The radius is assumed to be Earth radius. An 
-        error (measurement uncertainty) can be given as an N-element array, or as a scalar if the uncertainty is 
-        the same for all data points in the dataset. An alternative way of specifying 'ground_mag', if you do not 
-        have full 3D measurements, is to provide it as (M, N) values, where M < 3, and the rows correspond 
-        to the directions that are measured. Specify which directions using the components keyword 
-        (see documentation for that keyword for details).
+        field perturbation in the three rows, in Tesla. The coordinates can be given as (2, N) arrays of the 
+        magnetometers' longitudes and latitudes in the two rows (the radius is then assumed to be Earth's radius),
+        OR the coordinates can be given as (3, N) arrays where the last row contains the geocentric radii of the 
+        magnetometers. An error (measurement uncertainty) can be given as an N-element array, or as a scalar if 
+        the uncertainty is the same for all data points in the dataset. An alternative way of specifying 
+        'ground_mag', if you do not have full 3D measurements, is to provide it as (M, N) values, where M < 3, and 
+        the rows correspond to the directions that are measured. Specify which directions using the components 
+        keyword (see documentation for that keyword for details).
 
         'space_mag_fac': Magnetic field perturbations in space associated with field-aligned currents.
         Unless the components keyword is used, values should be given as (3, N) arrays, with eastward, 
@@ -139,7 +140,7 @@ class Data(object):
                 self.coords = {'lon':coordinates[0], 'lat':coordinates[1], 'r':coordinates[2]}
         else:
             self.coords = {}
-            assert datatype.lower() == 'fac'
+            assert datatype.lower() == 'fac', "coordinates must be provided for all datatypes that are not 'fac'"
         self.isvalid = True
         if np.ndim(self.values) == 2:
             self.N = self.values.shape[1] # number of data points
@@ -201,9 +202,6 @@ class Data(object):
             self.N = self.values.size
 
         return self
-
-
-    # TODO: map_V_to_height - needs APEXPY
 
     def __str__(self):
         return(self.datatype + ': ' + str(self.values))
