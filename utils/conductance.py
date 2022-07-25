@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import os
+import apexpy
 from scipy.interpolate import interp1d
 from lompe.utils import sunlight
 from lompe.dipole.dipole import Dipole
@@ -60,7 +61,8 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen ='hp', starlight = 0, F107 = 
         mlat, mlon = lat, lon # input lat, lon is centered dipole
         lat, lon = cd.mag2geo(lat, lon) # to geographic
     else:
-        mlat, mlon = cd.geo2mag(lat, lon) # to mag
+        a = apexpy.Apex(time, 110) 
+        mlat, mlon = a.geo2apex(lat, lon, 110) # to mag
     mlt = cd.mlon2mlt(mlon, time)     # get mlt
     
     # solar zenith angles for EUV conductances
