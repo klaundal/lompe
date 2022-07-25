@@ -27,11 +27,7 @@ Development tasks
 - KALLE: Plotting tool for cubed sphere projections
 - KALLE: Add updated polplot to Lompe
 - KALLE: Run for Nina's dates: 2014-01-21, 2014-12-18, 2014-12-19
-- AMALIE: Add function to map convection data
-- AMALIE: Helper function to get east, north orientation of LOS vector
-- Add height option for magnetometer station coordinates
-- Extend the methods in conductance to have options for coordinate input 
-(magnetic, geographic, etc.) 
+- Mapping of convection data in data.py or dataloader.py (with apexpy mapping functions?) 
 - ~~write paper~~
 
 
