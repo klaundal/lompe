@@ -3,9 +3,9 @@ Notebooks to produce figures for code paper
 - 01 - Cubed-sphere grid implementation - example and explanation
 - 02 - Solving the 2D continuity equation using implementation of cubed-sphere grid
 - 03 - SECS example - showcasing vectorized implementation of SECS equations 
-- 04 - how to use the implemented conductance models for EUV and Hardy  model. Example of differences in EUV conductances with different  calibrations. Also uses polplot for visulaization.
-- 05 - Polplot example. How to visualize with Polarplot: maps, curves, grids, scatter, text, contours and vectors on polar axes.
-- 07 - Standard Lompe example.
+- 04 - how to use the implemented conductance models for EUV and Hardy model. Example of differences in EUV conductances with different  calibrations. Also uses polplot for visulaization.
+- 05 - Polplot example. How to visualize with Polarplot: coastlines, curves, grids, scatter, text, contours, and vectors on polar axes.
+- 07 - Standard Lompe example with electric field as input.
 - 08 - Lompe for M-I coupling (FAC as input).
 
 
