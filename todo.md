@@ -28,6 +28,8 @@ Development tasks
 - KALLE: Add updated polplot to Lompe
 - KALLE: Run for Nina's dates: 2014-01-21, 2014-12-18, 2014-12-19
 - Mapping of convection data in data.py or dataloader.py (with apexpy mapping functions?) 
+- Handle radius coordinate from satellite measurements/magnetometers in a 
+better way (geocentric/geodetic)
 - ~~write paper~~
 
 
