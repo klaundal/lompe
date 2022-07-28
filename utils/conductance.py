@@ -76,19 +76,18 @@ def hardy_EUV(lon, lat, kp, time, hall_or_pedersen ='hp', starlight = 0, F107 = 
         hop = 'hp'
     
     if len(hop) > 1:
-        EUVh, EUVp = EUV_conductance(sza, F107, hop, calibration = calibration)
+        EUVh, EUVp = EUV_conductance(sza, F107, hop, calibration = calibration) # EUV
+        hc_hall, hc_pedersen = hardy(mlat, mlt, kp, hop)                        # auroral
     else:
-        EUV = EUV_conductance(sza, F107, hop, calibration = calibration)
+        EUV = EUV_conductance(sza, F107, hop, calibration = calibration)  # EUV
+        hc  = hardy(mlat, mlt, kp, hop)                                   # auroral
     
-    # auroral conductances
-    hc_hall, hc_pedersen = hardy(mlat, mlt, kp)
-
     if hop == 'h':
-        return (hc_hall + EUV + starlight).reshape(shape)
+        return (np.sqrt(hc**2 + EUV**2 + starlight**2)).reshape(shape)
     elif hop == 'p':
-        return (hc_pedersen + EUV + starlight).reshape(shape)
+        return (np.sqrt(hc**2 + EUV**2 + starlight**2)).reshape(shape)
     else:
-        return (hc_hall + EUVh + starlight).reshape(shape), (hc_pedersen + EUVp + starlight).reshape(shape)
+        return (np.sqrt(hc_hall**2 + EUVh**2 + starlight**2)).reshape(shape), (np.sqrt(hc_pedersen**2 + EUVp**2 + starlight**2)).reshape(shape)
 
 
 
