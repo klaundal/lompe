@@ -220,7 +220,7 @@ class Cmodel(object):
             
             if len(lon.shape) == 2:
                 EUV = EUV.reshape(lon.shape)
-            gridded = gridded + EUV
+            gridded = np.sqrt(gridded**2 + EUV**2)
 
         return gridded
 
@@ -271,6 +271,6 @@ class Cmodel(object):
             if len(lon.shape) == 2:
                 EUV = EUV.reshape(lon.shape)
             
-            gridded = gridded + EUV
+            gridded = np.sqrt(gridded**2 + EUV**2)
 
         return gridded
