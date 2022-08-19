@@ -30,26 +30,37 @@ Dependencies
 ============
 You should have the following modules installed:
 
+- `apexpy <https://github.com/aburrell/apexpy/>`_
+- matplotlib
 - numpy
 - pandas
+- `ppigrf <https://github.com/klaundal/ppigrf/>`_
 - scipy
-- matplotlib
-- `apexpy <https://github.com/aburrell/apexpy>`_
-- cartopy
 - xarray
-- netCDF4 (if you use the DMSP SSUSI preprocessing scripts)
-- `pydarn <https://github.com/SuperDARN/pydarn>`_ (if you use the SuperDARN data preprocessing helper scripts)
-- madrigalWeb (if you use the DMSP SSIES data preprocessing scripts)
-- `astropy <https://github.com/astropy/astropy>`_ (if you use the AMPERE Iridium data preprocessing scripts)
-- `cdflib <https://github.com/MAVENSDC/cdflib>`_ (for running lompe paper figure example 05)
+- `astropy <https://github.com/astropy/astropy/>`_ (if you use the AMPERE Iridium data preprocessing scripts)
+- `cdflib <https://github.com/MAVENSDC/cdflib/>`_ (for running lompe paper figures example 05)
+- `madrigalWeb <https://pypi.org/project/madrigalWeb/>`_ (if you use the DMSP SSIES data preprocessing scripts)
+- `netCDF4 <https://github.com/Unidata/netcdf4-python/>`_ (if you use the DMSP SSUSI data preprocessing scripts)
+- `pyAMPS <https://github.com/klaundal/pyAMPS/>`_ (for running code paper figures example 08)
+- `pydarn <https://github.com/SuperDARN/pydarn/>`_ (if you use the SuperDARN data preprocessing scripts)
+
 You should also have git version >= 2.13
 
 
 Install
 =======
-No pip install yet, so you should use git. Clone the repository like this::
+No pip install yet, so you should use git. But you'll need to install a module called ppigrf, which calculates IGRF values. That can be done like this::
+
+    pip install ppigrf
+
+Clone the repository like this::
 
     git clone https://github.com/klaundal/lompe
+
+Then, to get the code for the submodules, run::
+
+    git submodule init
+    git submodule update
 
 If you have the repository in a place that Python knows (in the PYTHONPATH environent variable), lompe can be imported as a module
 
@@ -57,3 +68,7 @@ We are developing this actively, so it is a good idea to check for newer version
 
     git pull
 
+
+Lompe papers
+============
+Main Lompe paper that describes the technique: `Local Mapping of Polar Ionospheric Electrodynamics <https://doi.org/10.1029/2022JA030356>`_

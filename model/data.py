@@ -8,7 +8,7 @@ class is defined here.
 import numpy as np
 
 class Data(object):
-    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', scale = None, error = 0):
+    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, scale = None, error = 0):
         """ 
         Initialize Data object that can be passed to the Emodel.add_data function. 
 
@@ -16,36 +16,38 @@ class Data(object):
 
         The data should be given as arrays with shape (M, N), where M is the number of dimensions
         and N is the number of data points. For example, for 3D vector valued data, M is 3, and
-        the rows correspond to the east, north, and up components of the measurements, in that order.
-        See documentation on specific data types for details
+        the rows correspond to the east, north, and up (ENU) components of the measurements, in that order.
+        See documentation on specific data types for details.
 
         The coordinates should be given as arrays with shape (M, N) where M is the number of dimensions
-        and N is the number of data points. For example, ground magnetometer data should be provided
+        and N is the number of data points. For example, ground magnetometer data can be provided
         with a (2, N) coordinate array with N values for the longitude and latitude, in degrees in the
         two rows. The order of coordinates is: longitude [degrees], latitude [degrees], radius [m]. See
         documentation on specific data types for details. 
 
-        You must specify the data type. Acceptable types are 
+        You must specify the data type. Acceptable types are:
+            
         'ground_mag': Magnetic field perturbations on ground. Unless the components keyword is used, values 
         should be given as (3, N) arrays, with eastward, northward and upward components of the magnetic 
-        field in the three rows, in Tesla. The coordinates should be given as (2, N) arrays with the magnetometers' 
-        longitudes and latitudes in the two rows. The radius is assumed to be Earth radius. An error (measurement 
-        uncertainty) can be given as an N-element array, or as a scalar if the uncertainty is the same for 
-        all data points in the dataset. An alternative way of specifying 'ground_mag', if you do not have 
-        full 3D measurements, is to provide it as (M, N) values, where M <3, and the rows correspond 
-        to the directions that are measured. Specify which directions using the components keyword 
-        (see documentation for that keyword for details)
+        field perturbation in the three rows, in Tesla. The coordinates can be given as (2, N) arrays of the 
+        magnetometers' longitudes and latitudes in the two rows (the radius is then assumed to be Earth's radius),
+        OR the coordinates can be given as (3, N) arrays where the last row contains the geocentric radii of the 
+        magnetometers. An error (measurement uncertainty) can be given as an N-element array, or as a scalar if 
+        the uncertainty is the same for all data points in the dataset. An alternative way of specifying 
+        'ground_mag', if you do not have full 3D measurements, is to provide it as (M, N) values, where M < 3, and 
+        the rows correspond to the directions that are measured. Specify which directions using the components 
+        keyword (see documentation for that keyword for details).
 
         'space_mag_fac': Magnetic field perturbations in space associated with field-aligned currents.
         Unless the components keyword is used, values should be given as (3, N) arrays, with eastward, 
-        northward and upward components of the magnetic field in the three rows, in Tesla. Note that the
-        upward component is not used for this parameter, since field-lines are assumed to be radial and 
+        northward and upward components of the magnetic field perturbation in the three rows, in Tesla. Note that 
+        the upward component is not used for this parameter, since field-lines are assumed to be radial and 
         FACs therefore have no vertical field (it must still be given). The coordinates should be given 
         as (3, N) arrays with the longitudes, latitudes, and radii of the measurements in the three rows. 
 
         'space_mag_full': Magnetic field perturbations in space associated with field-aligned currents 
         and horizontal divergence-free currents below the satellite. This is useful for low-flying satellites
-        with accurate magnetometers (e.g., Swarm, CHAMP). The format is the same as for 'space_mag_fac'
+        with accurate magnetometers (e.g., Swarm, CHAMP). The format is the same as for 'space_mag_fac'.
 
         'convection': Ionospheric convection velocity perpendicular to the magnetic field, mapped to the
         ionospheric radius. The values should be given as (2, N) arrays, where the two rows correspond to
@@ -80,19 +82,21 @@ class Data(object):
         coordinates: array
             array of  coordinates - see specific data types for details
         datatype: string
-            datatype should indicate which type of data it is. They can be
+            datatype should indicate which type of data it is. They can be:
             'ground_mag'     - ground magnetic field perturbation (no main field) data
             'space_mag_full' - space magnetic field perturbation with both FAC and
                                divergence-free current signal
             'space_mag_fac'  - space magnetic field perturbation with only FAC signal
-            'convection'     - F region plasma convection data - mapped to R
+            'convection'     - F-region plasma convection data - mapped to R
             'Efield'         - electric field - mapped to R
-            'Pedersen'       - Pedersen conductance
-            'Hall'           - Hall conductance
+        label: string, optional
+            A name for the dataset. If not set, the name will be hte same as the
+            datatype. Setting a label can be useful for distinguishing datasets
+            of the same type from different sources (e.g. DMSP and SuperDARN)
         LOS: array, optional
-            If the data is line-of-sight (los), indicate the line of sight using a (2, N) 
-            array of east, north directions for the N unit vectors pointing in the los
-            directions. By default, data is assumed to not be line of sight. Note that 
+            if the data is line-of-sight (LOS), indicate the line-of-sight using a (2, N) 
+            array of east, north directions for the N unit vectors pointing in the LOS
+            directions. By default, data is assumed to not be line-of-sight. Note that 
             LOS is only supported for Efield and convection, which are 2D data types. 
         components: int(s), optional
             indicate which components are included in the dataset. If 'all' (default),
@@ -105,24 +109,25 @@ class Data(object):
             typically 100 [m/s], and magnetic field 100e-9 [T]. If not set, a default value is
             used for each dataset.
         error: array of same length as values, or int, optional
-            Measurement error. Used to calculate the data covariance matrix. Use SI units
+            Measurement error. Used to calculate the data covariance matrix. Use SI units.
 
         """
 
         self.isvalid = False
         datatype = datatype.lower()
 
-        if datatype not in ['ground_mag', 'space_mag_full', 'space_mag_fac', 'convection', 'efield', 'fac', 'pedersen', 'hall']:
+        if datatype not in ['ground_mag', 'space_mag_full', 'space_mag_fac', 'convection', 'efield', 'fac']:
             print('datatype not recognized')
             return(None)
 
-        scales = {'ground_mag':100e-9, 'space_mag_full':200e-9, 'space_mag_fac':200e-9, 'convection':100, 'efield':10e-3, 'fac':1e-6, 'pedersen':1, 'hall':1}
+        scales = {'ground_mag':100e-9, 'space_mag_full':200e-9, 'space_mag_fac':200e-9, 'convection':100, 'efield':10e-3, 'fac':1e-6}
 
         if scale is None:
             self.scale = scales[datatype.lower()]
         else:
             self.scale = scale
 
+        self.label = datatype if label is None else label
         
         self.datatype = datatype
         self.values = values
@@ -135,7 +140,7 @@ class Data(object):
                 self.coords = {'lon':coordinates[0], 'lat':coordinates[1], 'r':coordinates[2]}
         else:
             self.coords = {}
-            assert datatype.lower() == 'fac'
+            assert datatype.lower() == 'fac', "coordinates must be provided for all datatypes that are not 'fac'"
         self.isvalid = True
         if np.ndim(self.values) == 2:
             self.N = self.values.shape[1] # number of data points
@@ -197,9 +202,6 @@ class Data(object):
             self.N = self.values.size
 
         return self
-
-
-
 
     def __str__(self):
         return(self.datatype + ': ' + str(self.values))

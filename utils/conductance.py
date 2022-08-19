@@ -1,74 +1,100 @@
-"""
-Conductance functions
-
-"""
+""" Conductance functions"""
 
 import numpy as np
 import pandas as pd
 import os
+import apexpy
 from scipy.interpolate import interp1d
 from lompe.utils import sunlight
-from apexpy import Apex
+from lompe.dipole.dipole import Dipole
 
 d2r = np.pi/180
 
-def hardy_EUV(lon, lat, kp, time, hall_or_pedersen, F107 = 100, starlight = 0, calibration = 'MoenBrekke1993'):
+def hardy_EUV(lon, lat, kp, time, hall_or_pedersen ='hp', starlight = 0, F107 = 100,
+              dipole=False, calibration = 'MoenBrekke1993'):
     """ calculate conductance at lat, lon for given kp at given time
     based on Hardy model + EUV contribution, from the functions defined below
+    
 
-    parameters
+    Parameters
     ----------
     lon: array
-        geographic longitudes
+        geographic longitudes [deg]
     lat: array
-        geograhpic latitudes
+        geograhpic latitudes [deg]
     kp: int
         Kp index (used for Hardy model)
     time: datetime
-        time
+        time, used to get solar zenith angles and for apex coordinate conversion
     hall_or_pedersen: string
-        'hall' or 'pedersen'
-    F107: float, optional
-        F107 index - used to scale EUV conductance. Default 100
+        specifies type of conductance, 'hall' or 'pedersen'
     starlight: float, optional
-        constant to add to conductance
+        constant to add to conductance, often small (e.g. Strobel et al. 1980 https://doi.org/10.1016/0032-0633(80)90050-1)
+        could be used to include "background-conductance" 
+    F107: float, optional
+        F107 index - used to scale EUV conductance. Default is 100
+    dipole : bool, optional
+        set to True if lat and lon are dipole coordinates. Default is False
     calibration: string, optional
         calibration to use in EUV_conductance calculation. See documentation
         of EUV_conductance function for info
+        
+    Returns
+    -------
+    If hall_or_pedersen == 'hall':
+        Total Hall conductances [mho] for each lat, lon
+    If hall_or_pedersen == 'pedersen':
+        Total Pedersen conductances [mho] for each lat, lon
+    If hall_or_pedersen == 'hallandpedersen' or 'hp':
+        Two arrays of conductances [mho] for each lat, lon, 
+        one for total Hall and one for total Pedersen 
+    
     """
-    if hall_or_pedersen.lower() not in ['hall', 'pedersen']:
-        raise Exception('hardy_EUV: hall_or_pedersen must be either hall or pedersen')
-
+    assert hall_or_pedersen.lower() in ['hall', 'h', 'pedersen', 'p', 'hp', 'hallandpedersen'], "hardy_EUV: hall_or_pedersen must be either hall or pedersen, or hallandpedersen"
+    
     lat, lon = np.array(lat, ndmin = 1), np.array(lon, ndmin = 1)
     shape = np.broadcast(lat, lon).shape
     lat, lon = lat.flatten(), lon.flatten()
-
-    sza = sunlight.sza(lat, lon, time)
-
-    if hall_or_pedersen.lower() == 'hall':
-        hop = 'h'
-    if hall_or_pedersen.lower() == 'pedersen':
-        hop = 'p'
-
-    EUV = EUV_conductance(sza, F107, hop, calibration = calibration)
-
-    a = Apex(time, refh = 110)
-    mlat, mlon = a.geo2apex(lat, lon, 110)
-    mlt = a.mlon2mlt(mlon, time)
-
-    hc_hall, hc_pedersen = hardy(mlat, mlt, kp)
-
-    if hall_or_pedersen.lower() == 'hall':
-        return (hc_hall + EUV + starlight).reshape(shape)
+    
+    cd = Dipole(time.year)       
+    if dipole:
+        mlat, mlon = lat, lon # input lat, lon is centered dipole
+        lat, lon = cd.mag2geo(lat, lon) # to geographic
     else:
-        return (hc_pedersen + EUV + starlight).reshape(shape)
+        a = apexpy.Apex(time, 110) 
+        mlat, mlon = a.geo2apex(lat, lon, 110) # to mag
+    mlt = cd.mlon2mlt(mlon, time)     # get mlt
+    
+    # solar zenith angles for EUV conductances
+    sza = sunlight.sza(lat, lon, time)
+        
+    if hall_or_pedersen.lower() in 'hall':
+        hop = 'h'
+    if hall_or_pedersen.lower() in 'pedersen':
+        hop = 'p'
+    if hall_or_pedersen.lower() in ['hp', 'hallandpedersen']:
+        hop = 'hp'
+    
+    if len(hop) > 1:
+        EUVh, EUVp = EUV_conductance(sza, F107, hop, calibration = calibration) # EUV
+        hc_hall, hc_pedersen = hardy(mlat, mlt, kp, hop)                        # auroral
+    else:
+        EUV = EUV_conductance(sza, F107, hop, calibration = calibration)  # EUV
+        hc  = hardy(mlat, mlt, kp, hop)                                   # auroral
+    
+    if hop == 'h':
+        return (np.sqrt(hc**2 + EUV**2 + starlight**2)).reshape(shape)
+    elif hop == 'p':
+        return (np.sqrt(hc**2 + EUV**2 + starlight**2)).reshape(shape)
+    else:
+        return (np.sqrt(hc_hall**2 + EUVh**2 + starlight**2)).reshape(shape), (np.sqrt(hc_pedersen**2 + EUVp**2 + starlight**2)).reshape(shape)
 
 
 
-def EUV_conductance(sza, f107, hallOrPed,
+def EUV_conductance(sza, F107 = 100, hallOrPed = 'hp',
                     calibration = 'MoenBrekke1993'):
     """
-    cond = EUV_conductance(sza,f107,hallOrPed,calibration='MoenBrekke1993')
+    cond = EUV_conductance(sza, F107, hallOrPed, calibration='MoenBrekke1993')
 
     Conductance calculated based on the plasma production at the height of max plasma production
     using the Chapman function (which assumes the earth is round, not flat) - and scaled to fit 
@@ -85,14 +111,13 @@ def EUV_conductance(sza, f107, hallOrPed,
     Parameters
     ----------
     sza: 		array
-        Solar zenith angle
-    f107: float or array
-        F107 index - used to scale EUV conductance
-    hallOrPed: 
-    time: 		datetime
-        time
-    hall_or_pedersen: 	string
-        Must be one of 'h', 'p', or 'hp', (corresponding to "Hall," "Pedersen," or both)  
+        Solar zenith angle in degrees
+    F107: float or array, optional
+        F10.7 index - used to scale EUV conductance
+        defualt is 100
+    hallOrPed: 	string, optional
+        Must be one of 'h', 'p', or 'hp', (corresponding to "Hall," "Pedersen," or both)
+        default is both
     calibration: string, optional
         calibration to use in EUV_conductance calculation. Should be one of 
         'MoenBrekke1993', 'MoenBrekke1993_alt', 'Cousinsetal2015', with reference to
@@ -106,29 +131,29 @@ def EUV_conductance(sza, f107, hallOrPed,
     Returns
     -------
     If hall_or_pedersen == 'h':
-        Hall conductances for each sza input value
+        Hall conductances [mho] for each sza input value
     If hall_or_pedersen == 'p':
-        Pedersen conductances for each sza input value
-    If hall_or_pedersen == 'p':
-        Tuple of two arrays, one for Hall and one for Pedersen conductances, for each sza input value
+        Pedersen conductances [mho] for each sza input value
+    If hall_or_pedersen == 'hp':
+        Tuple of two arrays, one for Hall and one for Pedersen conductances [mho], for each sza input value
     
 
     Example
     -------
     # Get Hall conductance
-    f107 = 70
+    F107 = 70
     sza = np.arange(0,120.1,0.1)
-    hall = EUV_conductance(sza,f107,'h')
+    hall = EUV_conductance(sza,F107,'h')
 
     # Get Pedersen conductance
-    f107 = 70
+    F107 = 70
     sza = np.arange(0,120.1,0.1)
-    pedersen = EUV_conductance(sza,f107,'p')
+    pedersen = EUV_conductance(sza,F107,'p')
 
     # Get Hall and Pedersen conductance
-    f107 = 70
+    F107 = 70
     sza = np.arange(0,120.1,0.1)
-    hall, pedersen = EUV_conductance(sza,f107,'hp')
+    hall, pedersen = EUV_conductance(sza,F107,'hp')
 
 
     References
@@ -143,7 +168,7 @@ def EUV_conductance(sza, f107, hallOrPed,
     """
     shape = np.array(sza).shape
 
-    assert hallOrPed.lower() in ['h','p','hp'],"Must select one of 'h', 'p', or 'hp' for hallOrPed!"
+    assert hallOrPed.lower() in ['h','p','hp'],"EUV_conductance: Must select one of 'h', 'p', or 'hp' for hallOrPed!"
 
 
     PRODUCTIONFILE = os.path.join(os.path.dirname(__file__), '../data/chapman_euv_productionvalues.txt')
@@ -188,29 +213,29 @@ def EUV_conductance(sza, f107, hallOrPed,
 
         if getH:
             halinterp = interp1d(MODELSZAS,
-                                 f107**(f107hallexponent)*(0.81*PRODUCTION + 0.54*np.sqrt(PRODUCTION)),
+                                 F107**(f107hallexponent)*(0.81*PRODUCTION + 0.54*np.sqrt(PRODUCTION)),
                                  fill_value='extrapolate')
-            sigh = halinterp(sza)
+            sigh = halinterp(sza) # moh
 
         if getP:
             pedinterp = interp1d(MODELSZAS,
-                                 f107**(f107pedexponent)*(0.34*PRODUCTION + 0.93*np.sqrt(PRODUCTION)),
+                                 F107**(f107pedexponent)*(0.34*PRODUCTION + 0.93*np.sqrt(PRODUCTION)),
                                  fill_value='extrapolate')
-            sigp = pedinterp(sza)
+            sigp = pedinterp(sza) # moh
 
     else:
 
         if getH:
             halinterp = interp1d(MODELSZAS,
-                                 f107**(f107hallexponent)*HalScl*(PRODUCTION)**(hallexponent),
+                                 F107**(f107hallexponent)*HalScl*(PRODUCTION)**(hallexponent),
                                  fill_value='extrapolate')
-            sigh = halinterp(sza)
+            sigh = halinterp(sza) # moh
 
         if getP:
             pedinterp = interp1d(MODELSZAS,
-                                 f107**(f107pedexponent)*PedScl*(PRODUCTION)**(pedexponent),
+                                 F107**(f107pedexponent)*PedScl*(PRODUCTION)**(pedexponent),
                                  fill_value='extrapolate')
-            sigp = pedinterp(sza)
+            sigp = pedinterp(sza) # moh
 
 
     if getH and getP:
@@ -225,7 +250,7 @@ def EUV_conductance(sza, f107, hallOrPed,
         return sigp.reshape(shape)
 
 
-def hardy(mlat, mlt, kp):
+def hardy(mlat, mlt, kp, hallOrPed = 'hp'):
     """ calculte Hardy conductivity at given mlat/mlt, for given Kp 
     
     The model is described and defined in:
@@ -242,63 +267,87 @@ def hardy(mlat, mlt, kp):
         magnetic local time in hours
     kp: int
         Kp level, must be in [0, 1, ... 6]
-
+    hallOrPed: str, optional
+        Must be one of 'h', 'p', or 'hp', (corresponding to "Hall," "Pedersen," or both)
+        default is both
+    
     Returns
     -------
     Hall conductance: array
         array of Hall conductance [mho] with shape implied by mlat and mlt
     Peddersen conductance: array
         array of Pedersen conductance [mho] with shape implied by mlat and mlt
+    
+    if hallOrped == 'h':
+        Hall conductance
+    if hallOrped == 'p':
+        Pedersen conductance
+    if hallOrped == 'hp':
+        Hall conductance, Pedersen conductance
 
     """
-
-    assert kp in [0, 1, 2, 3, 4, 5, 6]
+    assert hallOrPed.lower() in ['h','p','hp'], "hardy: Must select one of 'h', 'p', or 'hp' for hallOrPed!"
+    assert kp in [0, 1, 2, 3, 4, 5, 6], "hardy: Kp must be an integer in the range 0-6"
+    
     mlat, mlt = np.array(np.abs(mlat), ndmin = 1), np.array(mlt, ndmin = 1)
     shape = np.broadcast(mlat, mlt).shape
     mlat, mlt = mlat.flatten(), mlt.flatten()
 
     # load hall and pedersen coefficient files:
     basepath = os.path.dirname(__file__)
-
-    hc = pd.read_table(basepath + '/../data/hardy_hall_coefficients.txt'    , sep = ',', skipinitialspace=True, skiprows = [0,])
-    pc = pd.read_table(basepath + '/../data/hardy_pedersen_coefficients.txt', sep = ',', skipinitialspace=True, skiprows = [0,])
-
-    # select only relevant kp:
-    pc = pc[pc.Kp == 'K' + str(kp)]
-    hc = hc[hc.Kp == 'K' + str(kp)]
-
-    # define a dictionary whose keys are the 'term' column values, and values are the corresponding function of mlt
-    pc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in pc['term']]))
-    pc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in pc['term']]    # the const term will be cos, but with n = 0
-    hc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in hc['term']]))
-    hc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in hc['term']]
-
-    # evaluate the fourier series:
-    pedersen_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
-    for row in pc.iterrows():
-        values = row[1]
-        for key in pedersen_epstein:
-            pedersen_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
-
-    hall_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
-    for row in hc.iterrows():
-        values = row[1]
-        for key in hall_epstein:
-            hall_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
-
-    # evaluate the Epstein transition function, Pedersen:
-    r, S1, S2, h0 = pedersen_epstein['maxvalue'], pedersen_epstein['up-slope'], pedersen_epstein['down-slope'], pedersen_epstein['maxlatitude']
-    pedersen_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
-
-    # evaluate the Epstein transition function, Halle:
-    r, S1, S2, h0 = hall_epstein['maxvalue'], hall_epstein['up-slope'], hall_epstein['down-slope'], hall_epstein['maxlatitude']
-    hall_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
-
-    # introduce floors (using recommendation from paper)
-    pedersen_conductance[(mlat < h0) & (pedersen_conductance < 0   )] = 0
-    pedersen_conductance[(mlat > h0) & (pedersen_conductance < 0.55)] = 0.55
-    hall_conductance[    (mlat < h0) & (hall_conductance     < 0   )] = 0
-    hall_conductance[    (mlat > h0) & (hall_conductance     < 0.55)] = 0.55
-
-    return hall_conductance.reshape(shape), pedersen_conductance.reshape(shape)
+    
+    # Hardy for Hall
+    if 'h' in hallOrPed.lower():
+        hc = pd.read_table(basepath + '/../data/hardy_hall_coefficients.txt'    , sep = ',', skipinitialspace=True, skiprows = [0,])
+        hc = hc[hc.Kp == 'K' + str(kp)]     # select only relevant kp
+        
+        # define a dictionary whose keys are the 'term' column values, and values are the corresponding function of mlt
+        hc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in hc['term']]))
+        hc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in hc['term']]
+        
+        # evaluate the fourier series        
+        hall_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
+        for row in hc.iterrows():
+            values = row[1]
+            for key in hall_epstein:
+                hall_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
+        
+        # evaluate the Epstein transition function, Hall:
+        r, S1, S2, h0 = hall_epstein['maxvalue'], hall_epstein['up-slope'], hall_epstein['down-slope'], hall_epstein['maxlatitude']
+        hall_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
+        
+        # introduce floors (using recommendation from paper)
+        hall_conductance[    (mlat < h0) & (hall_conductance     < 0   )] = 0
+        hall_conductance[    (mlat > h0) & (hall_conductance     < 0.55)] = 0.55
+        
+    # Hardy for Pedersen
+    if 'p' in hallOrPed.lower():
+        pc = pd.read_table(basepath + '/../data/hardy_pedersen_coefficients.txt', sep = ',', skipinitialspace=True, skiprows = [0,])
+        pc = pc[pc.Kp == 'K' + str(kp)]     # select only relevant kp
+        
+        # define a dictionary whose keys are the 'term' column values, and values are the corresponding function of mlt
+        pc['n']    = list(map(int, [t[-1] if t[-1] != 't' else 0 for t in pc['term']]))
+        pc['trig'] = [np.sin if t[:3] == 'Sin' else np.cos  for t in pc['term']]    # the const term will be cos, but with n = 0
+        
+        # evaluate the fourier series
+        pedersen_epstein = dict(zip([u'maxvalue', u'maxlatitude', u'up-slope', u'down-slope'], [0]*4))
+        for row in pc.iterrows():
+            values = row[1]
+            for key in pedersen_epstein:
+                pedersen_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)    
+    
+        # evaluate the Epstein transition function, Pedersen:
+        r, S1, S2, h0 = pedersen_epstein['maxvalue'], pedersen_epstein['up-slope'], pedersen_epstein['down-slope'], pedersen_epstein['maxlatitude']
+        pedersen_conductance = r + S1*(mlat - h0) + (S2 - S1) * np.log((1 - S1/(S2 * np.exp(-(mlat - h0)))) / (1 - (S1/S2)))
+        
+        # introduce floors (using recommendation from paper)
+        pedersen_conductance[(mlat < h0) & (pedersen_conductance < 0   )] = 0
+        pedersen_conductance[(mlat > h0) & (pedersen_conductance < 0.55)] = 0.55
+    
+    if hallOrPed.lower() == 'h':
+        return hall_conductance.reshape(shape)
+    elif hallOrPed.lower() == 'p':
+        return pedersen_conductance.reshape(shape)
+    else:
+        return hall_conductance.reshape(shape), pedersen_conductance.reshape(shape)
 

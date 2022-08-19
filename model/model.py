@@ -4,9 +4,9 @@ import numpy as np
 from scipy.interpolate import RectBivariateSpline, griddata
 from lompe.secsy import get_SECS_B_G_matrices, get_SECS_J_G_matrices
 from lompe.secsy import cubedsphere as cs
-from lompe.ppigrf import igrf
+from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
-from lompe.utils.dipole import dipole_field
+from lompe.dipole import Dipole
 from .varcheck import check_input
 
 RE = 6371.2e3 # Earth radius in meters
@@ -15,7 +15,6 @@ class Emodel(object):
     def __init__(self, grid,
                        Hall_Pedersen_conductance,
                        epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
-                       refh = 110., # apex reference height in km - also used for IGRF altitude
                        dipole = False # set to True to use dipole field and dipole coords
                 ):
         """
@@ -44,9 +43,7 @@ class Emodel(object):
         epoch: float, optional
             Decimal year, used in calculations of IGRF magnetic field and in
             calculation of magnetic coordinates. Set to 2015. by default
-        refh: float, optional
-            Reference height for apex coordinates [km]. Set to 110 by default
-        dipole: bool, optional
+        dipole: bool or float, optional
             Set to True to use dipole magnetic field instead of IGRF. If True, all
             coords are assumed to be dipole coordinates. Useful for idealized calculations.
             Default is False
@@ -60,7 +57,7 @@ class Emodel(object):
         eta_e = np.hstack((self.grid_J.eta_mesh[:, 0], self.grid_J.eta_mesh[-1,   0] + self.grid_J.deta)) - self.grid_J.deta/2 
         self.grid_E = cs.CSgrid(cs.CSprojection(self.grid_J.projection.position, self.grid_J.projection.orientation),
                                self.grid_J.L + self.grid_J.Lres, self.grid_J.W + self.grid_J.Wres, self.grid_J.Lres, self.grid_J.Wres, 
-                               edges = (xi_e, eta_e), R = self.R)
+                               edges = (xi_e, eta_e), R = self.R) # outer
 
         self.lat_J, self.lon_J = np.ravel( self.grid_J.lat ), np.ravel( self.grid_J.lon )
         self.lat_E, self.lon_E = np.ravel( self.grid_E.lat ), np.ravel( self.grid_E.lon )
@@ -79,11 +76,14 @@ class Emodel(object):
         self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance)
 
         # calculate main field values for all grid points
-        if dipole:
-            Bn, Bu = dipole_field(self.lat_E, self.grid_E.R * 1e-3, epoch)
+        self.dipole = dipole
+        self.epoch = epoch
+        refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
+        if self.dipole:
+            Bn, Bu = Dipole(self.epoch).B(self.lat_E, self.grid_E.R * 1e-3)
             Be = np.zeros_like(Bn)
         else: # use IGRF
-            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, refh, yearfrac_to_datetime([epoch]))
+            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, refh, yearfrac_to_datetime([self.epoch]))
         Be, Bn, Bu = Be * 1e-9, Bn * 1e-9, Bu * 1e-9 # nT -> T
         self.B0 = np.sqrt(Be**2 + Bn**2 + Bu**2).reshape((1, -1))
         self.Bu = Bu.reshape((1, -1))
@@ -116,7 +116,7 @@ class Emodel(object):
 
         # matrix L that calculates derivative in magnetic eastward direction on grid_E:
         De2, Dn2 = self.grid_E.get_Le_Ln()
-        if dipole: # L matrix gives gradient in eastward direction
+        if self.dipole: # L matrix gives gradient in eastward direction
             self.L = De2
             self.LTL = self.L.T.dot(self.L)
         else: # L matrix gives gradient in QD eastward direction
@@ -180,15 +180,15 @@ class Emodel(object):
         self._w = np.empty( 0)
 
         # make expanded grid for calculation of data density:
-        biggrid = cs.CSgrid(self.grid_J.projection,
-                            self.grid_J.L + 2 * perimeter_width * self.grid_J.Lres, self.grid_J.W + 2 * perimeter_width * self.grid_J.Wres,
-                            self.grid_J.Lres, self.grid_J.Wres,
-                            R = self.R )
+        self.biggrid = cs.CSgrid(self.grid_J.projection,
+                                 self.grid_J.L + 2 * perimeter_width * self.grid_J.Lres, self.grid_J.W + 2 * perimeter_width * self.grid_J.Wres,
+                                 self.grid_J.Lres, self.grid_J.Wres,
+                                 R = self.R )
 
         for dtype in self.data.keys(): # loop through data types
             for ds in self.data[dtype]: # loop through the datasets within each data type
                 # skip data points that are outside biggrid:
-                ds = ds.subset(biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
+                ds = ds.subset(self.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
 
                 if 'mag' in dtype:
                     Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
@@ -205,8 +205,8 @@ class Emodel(object):
 
                 # calculate weights based on data density:
                 if data_density_weight:
-                    bincount = biggrid.count(ds.coords['lon'], ds.coords['lat'])
-                    i, j = biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
+                    bincount = self.biggrid.count(ds.coords['lon'], ds.coords['lat'])
+                    i, j = self.biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
                     spatial_weight = 1. / np.maximum(bincount[i, j], 1)
                     spatial_weight[i == -1] = 1
                     if ds.values.ndim == 2: # stack weights for each component in dataset.values:
@@ -747,7 +747,7 @@ class Emodel(object):
         consistent with the output of self.j(), and could be used to
         check that the model representation is ok. Deviations could be
         due to inaccuracies in the finite difference evaluations, and
-        woudl suggest improving the grid resolution (or the finite
+        would suggest improving the grid resolution (or the finite
         difference code...)
 
         Requires the model vector to be defined.

@@ -23,10 +23,11 @@ Development tasks
 - find a better solution for the return_shape keyword (it is handled in decorator now)
 - KALLE: Implement Fukushima's correction for inclined field
 - KALLE/SIMON - include magnetic coordinates in display
-- KALLE: Visualization - scatter plots of model data misfits
 - KALLE: Plotting tool for cubed sphere projections
-- KALLE: Add an optional weight to the Data class (for example to allow for temporal weighting -- make sure that the spatial weights are based on the weighted number of data points in each cell)
 - KALLE: Run for Nina's dates: 2014-01-21, 2014-12-18, 2014-12-19
+- Mapping of convection data in data.py or dataloader.py (with apexpy mapping functions?) 
+- Handle radius coordinate from satellite measurements/magnetometers in a 
+better way (geocentric/geodetic)
 - ~~write paper~~
 
 

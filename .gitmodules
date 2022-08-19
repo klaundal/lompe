@@ -1,6 +1,9 @@
 [submodule "secsy"]
 	path = secsy
 	url = https://github.com/klaundal/secsy
-[submodule "ppigrf"]
-	path = ppigrf
-	url = https://github.com/klaundal/ppigrf
+[submodule "polplot"]
+	path = polplot
+	url = https://github.com/klaundal/polplot
+[submodule "dipole"]
+	path = dipole
+	url = https://github.com/klaundal/dipole
