@@ -29,7 +29,7 @@ Development tasks
 - Handle radius coordinate from satellite measurements/magnetometers in a 
 better way (geocentric/geodetic)
 - ~~write paper~~
-
+- Reduce east/west regularization towards the pole
 
 # long-term todo
 - model residuals from empirical model to reduce boundary effects (HV's idea)
