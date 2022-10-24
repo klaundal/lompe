@@ -72,3 +72,7 @@ We are developing this actively, so it is a good idea to check for newer version
 Lompe papers
 ============
 Main Lompe paper that describes the technique: `Local Mapping of Polar Ionospheric Electrodynamics <https://doi.org/10.1029/2022JA030356>`_
+
+Funding
+=======
+The Lompe development is funded by the `Trond Mohn Foundation <https://birkeland.uib.no/trond-mohn-stiftelse-grant/>`_, and by the Research Council of Norway (300844/F50)
