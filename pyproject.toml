@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lompe"
+version = "1.1.0"
+dependencies = [
+    "apexpy",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "ppigrf",
+    "scipy",
+    "xarray",
+]
+
+[project.optional-dependencies]
+extras = [
+    "astropy",
+    "cdflib",
+    # "madgrigalweb",  # don't know why this fails
+    "netCDF4",
+    "pyAMPS",
+    "pydarn",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["lompe"]
