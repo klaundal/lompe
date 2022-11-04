@@ -34,7 +34,7 @@ You should have the following modules installed:
 - matplotlib
 - numpy
 - pandas
-- `ppigrf <https://github.com/klaundal/ppigrf/>`_
+- `ppigrf <https://github.com/klaundal/ppigrf/>`_ (install with pip install ppigrf)
 - scipy
 - xarray
 - `astropy <https://github.com/astropy/astropy/>`_ (if you use the AMPERE Iridium data preprocessing scripts)
@@ -49,24 +49,27 @@ You should also have git version >= 2.13
 
 Install
 =======
-No pip install yet, so you should use git. But you'll need to install a module called ppigrf, which calculates IGRF values. That can be done like this::
-
-    pip install ppigrf
-
-Clone the repository like this::
+Start by cloning the repository, and get the code for the submodules::
 
     git clone https://github.com/klaundal/lompe
-
-Then, to get the code for the submodules, run::
-
+    cd lompe
     git submodule init
     git submodule update
 
-If you have the repository in a place that Python knows (in the PYTHONPATH environent variable), lompe can be imported as a module
+Then there are two options for how to make it possible to import and use lompe from any location. The first option should be fairly automatic, while the other option requires you to install all the dependencies yourself. 
 
-We are developing this actively, so it is a good idea to check for newer versions. To get the latest version do::
+Option 1
+--------
+The first option is to create a virtual environment with ``conda``, where all dependencies are automatically installed. In this example, the environment is called ``lompe_env``:: 
 
-    git pull
+    conda env create --name lompe_env --file binder/environment.yml
+    conda activate lompe_env
+    pip install -e .[extras]
+
+Option 2
+--------
+The second option is to add the path to the lompe folder to PYTHONPATH, and make sure that all dependencies are installed. This option may be good if you plan to make changes to the lompe code and have the changes available immediately. 
+
 
 
 Lompe papers
