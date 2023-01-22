@@ -91,12 +91,6 @@ def check_input(func):
             if np.any(argdict['r'] < model.R * .5):
                 raise Exception('radii passed to {} are too low to make sense'.format(func.__name__))
         xi, eta = model.grid_E.projection.geo2cube(argdict['lon'], argdict['lat'])
-        if np.any(np.abs(xi) * 180 / np.pi > 45) | np.any(np.abs(eta) * 180 / np.pi > 45):
-            raise Exception("""some coordinates passed to {} are more than 45 degrees away from grid center. 
-                               If you really want to include such data, you have to modify cubedsphere to 
-                               account for multiple cube faces. """.format(func.__name__))
-
-
 
         # all done - return with shape or not
         if 'return_shape' in argdict.keys() and argdict['return_shape']:
