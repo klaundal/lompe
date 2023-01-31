@@ -75,7 +75,7 @@ The second option is to add the path to the lompe folder to PYTHONPATH, and make
 Lompe papers
 ============
 - Main Lompe paper that describes the technique: `Local Mapping of Polar Ionospheric Electrodynamics <https://doi.org/10.1029/2022JA030356>`_
-- Paper about the Lompe code: `The Lompe code: A Python toolbox for ionospheric data analysis <https://doi.org/10.1029/2022JA030356>`_
+- Paper about the Lompe code: `The Lompe code: A Python toolbox for ionospheric data analysis <https://doi.org/10.3389/fspas.2022.1025823>`_
 
 Funding
 =======
