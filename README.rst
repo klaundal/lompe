@@ -20,7 +20,7 @@ We recommend to use the examples to learn how to use Lompe, but the general work
     >>> model.add_data(my_data1, my_data2)
     >>> # run inversion
     >>> model.run_inversion()
-    >>> # now the map is ready, and we can plot plasma flows, currents, magnetic fields, ...
+    >>> # now the model vector is ready, and we can plot plasma flows, currents, magnetic fields, ...
     >>> model.lompeplot()
     >>> # or calculate some quantity, like plasma velocity:
     >>> ve, vn = model.v(mylon, mylat)
