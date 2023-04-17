@@ -2,7 +2,7 @@
 import apexpy
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, griddata
-from lompe.secsy import get_SECS_B_G_matrices, get_SECS_J_G_matrices
+from lompe.secsy import get_SECS_B_G_matrices, get_SECS_J_G_matrices, get_Nakano_cf_G_matrices
 from lompe.secsy import cubedsphere as cs
 from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
@@ -15,7 +15,9 @@ class Emodel(object):
     def __init__(self, grid,
                        Hall_Pedersen_conductance,
                        epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
-                       dipole = False # set to True to use dipole field and dipole coords
+                       dipole = False, # set to True to use dipole field and dipole coords
+                       nakano_cf = False,
+                       nakano_eta = 131.4
                 ):
         """
         Electric field model
@@ -47,8 +49,13 @@ class Emodel(object):
             Set to True to use dipole magnetic field instead of IGRF. If True, all
             coords are assumed to be dipole coordinates. Useful for idealized calculations.
             Default is False
+        nakano_cf: bool or float, optional
+            Set to True to use Nakano et al (2020) spherical Gaussian functions.
+            Default is False
         """
 
+        self.nakano_cf = nakano_cf
+        self.nakano_eta = nakano_eta
 
         # set up inner and outer grids:
         self.grid_J = grid # inner
@@ -282,10 +289,16 @@ class Emodel(object):
         Not intended to be called by user in standard use case
         """
 
-        Ee, En = get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E,
-                                       current_type = 'curl_free',
-                                       RI = self.R,
-                                       singularity_limit = self.secs_singularity_limit)
+        if not self.nakano_cf:
+            Ee, En = get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E,
+                                           current_type = 'curl_free',
+                                           RI = self.R,
+                                           singularity_limit = self.secs_singularity_limit)
+        else:
+            Ee, En = get_Nakano_cf_G_matrices(lat, lon, self.lat_E, self.lon_E,
+                                              current_type = 'curl_free',
+                                              eta=self.nakano_eta,
+                                              RI = self.R)
 
         return Ee, En
 
@@ -347,10 +360,16 @@ class Emodel(object):
         if self.m is None:
             raise Exception('Model vector not defined yet. Add data and call run_inversion()')
 
-        G = get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E,
-                                  current_type = 'potential',
-                                  RI = self.R,
-                                  singularity_limit = self.secs_singularity_limit)
+        if not self.nakano_cf:
+            G = get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E,
+                                      current_type = 'potential',
+                                      RI = self.R,
+                                      singularity_limit = self.secs_singularity_limit)
+        else:
+            G = get_Nakano_cf_G_matrices(lat, lon, self.lat_E, self.lon_E,
+                                         current_type = 'potential',
+                                         eta=self.nakano_eta,
+                                         RI = self.R)
 
         return G.dot(self.m)
 
