@@ -7,7 +7,7 @@ on:
 
 jobs:
   checks:
-    name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }}
+    name: Python ${{ matrix.python-version }} on ${{ matrix.runs-on }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -23,6 +23,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install lompe
         run: |
-          pip install -e .[extras]
+          pip install -e .[dev,extras]
       - name: Test lompe
-        run: python -c "import lompe"
+        run: python -m pytest
