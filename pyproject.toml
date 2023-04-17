@@ -24,7 +24,18 @@ extras = [
     "pyAMPS",
     "pydarn",
 ]
+dev = [
+    "pytest",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["lompe"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
+xfail_strict = true
+testpaths = [
+    "tests",
+]
