@@ -695,10 +695,10 @@ class Emodel(object):
         Parameters
         ----------
         lon : array, optional
-            Longitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Longitudes [degrees] of the evaluation points, default is center of exterior grid points (grid_E).
             Must have same shape as lat
         lat : array, optional
-            Latitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Latitudes [degrees] of the evaluation points, default is center of exterior grid points (grid_E).
             Must have same shape as lon
 
         Returns
@@ -730,8 +730,15 @@ class Emodel(object):
         # upward current on grid is negative divergence:
         ju_ = -self.Ddiv.dot(np.hstack((je, jn)))
 
-        # interpolate to desired coords
+        # interpolate to desired coords if necessary
         xi, eta = self.grid_J.projection.geo2cube(lon, lat) # cs coords
+        try: # if the input grid is equal grid_J, skip interpolation
+            if np.all(np.isclose(xi - self.grid_J.xi.flatten(), 0)) & \
+               np.all(np.isclose(eta - self.grid_J.eta.flatten(), 0)):
+                return ju_.reshape(shape)
+        except:
+            pass
+
         gridcoords = np.vstack((self.grid_J.xi.flatten(), self.grid_J.eta.flatten())).T
         ju = griddata(gridcoords, ju_, np.vstack((xi, eta)).T)
 
