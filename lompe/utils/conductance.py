@@ -7,6 +7,8 @@ import apexpy
 from scipy.interpolate import interp1d
 from lompe.utils import sunlight
 from lompe.dipole.dipole import Dipole
+from scipy.interpolate import RectBivariateSpline
+
 
 d2r = np.pi/180
 
@@ -351,3 +353,183 @@ def hardy(mlat, mlt, kp, hallOrPed = 'hp'):
     else:
         return hall_conductance.reshape(shape), pedersen_conductance.reshape(shape)
 
+
+def calculate_robinson_conductance(FAC):
+    ''' Estimate Hall and Pedersen conductance based on AMPERE FAC data, as
+    described in 
+    Robinson, R. M., Zanetti, L., Anderson, B., Vines, S., & Gjerloev, J. (2021). 
+    Determination of auroral electrodynamic parameters from AMPERE field-aligned 
+    current measurements. Space Weather, 19, e2020SW002677. 
+    https://doi.org/10.1029/2020SW002677
+    
+    Parameters
+    ----------
+    FAC: array
+        1200 element array of FAC values [muA/m2] downloaded from the AMPERE webpage
+ 
+    
+    Returns
+    -------
+    (sigmaH, sigmaP): 2 element tuple of 2D arrays
+        array of Hall/Pedersen conductance [mho] with shape matching the 2D shape of 
+        AMPERE FAC data
+    
+    '''
+
+    #Arrays of the native AMPERE FAC product coordinates
+    amp_sh = (24,50) # Shape of the AMPERE FAC data product
+    amp_colat = np.tile(np.arange(1,amp_sh[1]+1),amp_sh[0]).reshape((amp_sh[0], 
+                                                                     amp_sh[1]))
+    amp_mlt = np.array([amp_sh[1]*[i] for i in np.arange(0,amp_sh[0])])
+    amp_fac = FAC.copy().reshape(amp_sh)
+    
+    # load hall and pedersen coefficient file:
+    basepath = os.path.dirname(__file__)
+    coefs = pd.read_table(basepath + '/../data/robinson_conductance_coefs.txt', 
+        skipinitialspace=True, skiprows = 1, delim_whitespace=True)
+    # basepath = '/Users/jone/BCSS-DAG Dropbox/Jone Reistad/git/lompe/lompe'
+    # coefs = pd.read_table(basepath + '/data/robinson_conductance_coefs.txt', 
+        # skipinitialspace=True, skiprows = 1, delim_whitespace=True)
+    
+    #Apply eq4 in the paper
+    ups = amp_fac >= 0
+    downs = amp_fac < 0
+    sigma_ = np.zeros(amp_sh)
+    sigmaH = np.zeros(amp_sh)
+    sigmaH[ups] = (sigma_+coefs.uh0.values[:,np.newaxis])[ups] + (sigma_+coefs.uh1.values[:,np.newaxis])[ups]*amp_fac[ups]
+    sigmaH[downs] = (sigma_+coefs.dh0.values[:,np.newaxis])[downs] + (sigma_+coefs.dh1.values[:,np.newaxis])[downs]*amp_fac[downs]
+    sigmaP = np.zeros(amp_sh)
+    sigmaP[ups] = (sigma_+coefs.up0.values[:,np.newaxis])[ups] + (sigma_+coefs.up1.values[:,np.newaxis])[ups]*amp_fac[ups]
+    sigmaP[downs] = (sigma_+coefs.dp0.values[:,np.newaxis])[downs] + (sigma_+coefs.dp1.values[:,np.newaxis])[downs]*amp_fac[downs]
+
+
+    #Apply filtering when current density is low
+    fill_value = 2 #mhos, from the paper
+    rolling_  = pd.DataFrame(amp_fac.T).rolling(3, center=True).mean().T
+    use = np.abs(rolling_) < 0.1
+    sigmaP[use.values] = fill_value
+    sigmaP[use.values] = fill_value
+    
+    #Filtering when signs are switching
+    signed = pd.DataFrame(amp_fac)
+    signed[ups] = 1
+    signed[downs] = -1
+    changed = np.diff(signed, axis=1, append=0)
+    use = np.abs(changed) == 2 
+    rolling_H  = pd.DataFrame(sigmaH.T).rolling(3, center=True).mean().fillna(method='bfill').fillna(method='ffill').T
+    sigmaH[use] = rolling_H.values[use]
+    rolling_P  = pd.DataFrame(sigmaP.T).rolling(3, center=True).mean().fillna(method='bfill').fillna(method='ffill').T
+    sigmaP[use] = rolling_P.values[use]
+
+    return (sigmaH, sigmaP)    
+
+
+def robinson(mlat, mlt, sigmaH, sigmaP):
+    ''' Interpolate value for conductance (from AMPERE FAC data product) onto 
+    the location specified by mlat and mlt. 
+    
+    Parameters
+    ----------
+    mlat: array
+        magnetic latitude in degrees
+    mlt: array
+        magnetic local time in hours
+    sigmaH: 2D array
+        Hall conductance [mho] on the native AMPERE grid.
+    sigmaP: 2D array
+        Pedersen conductance [mho] on the native AMPERE grid.         
+    
+    Returns
+    -------
+    (sigma_H, sigma_P): 2 element tuple of arrays
+        Interpolated values of Hall and Pedersen conductances [mho] at the 
+        user provided input locations mlat and mlt, with the same shape as input.
+    '''
+    #Checking input
+    amp_sh = (24,50) # Shape of the AMPERE FAC data product
+    assert sigmaP.shape==amp_sh, f"Shape of Pedersen conductance array is not (24,50). Got: {sigmaP.shape}"
+    assert sigmaH.shape==amp_sh, f"Shape of Hall conductance array is not (24,50). Got: {sigmaH.shape}"
+    mlat, mlt = np.array(np.abs(mlat), ndmin = 1), np.array(mlt, ndmin = 1)
+    shape = np.broadcast(mlat, mlt).shape
+    mlat, mlt = mlat.flatten(), mlt.flatten()
+    
+    #Arrays of the native AMPERE FAC product coordinates
+    # amp_colat = np.tile(np.arange(1,amp_sh[1]+1),amp_sh[0]+1).reshape((amp_sh[0]+1,amp_sh[1]))
+    # amp_mlt = np.array([amp_sh[1]*[i] for i in np.arange(0,amp_sh[0]+1)])
+    sigmaH_ = np.vstack((sigmaH, sigmaH[0,:][np.newaxis,:]))
+    sigmaP_ = np.vstack((sigmaP, sigmaP[0,:][np.newaxis,:]))
+
+    
+    #Spline representation of the global FAC pattern in the given hemisphere    
+    hall_spline = RectBivariateSpline(np.arange(0,amp_sh[0]+1), 
+                                        np.arange(1,amp_sh[1]+1), sigmaH_, 
+                                        kx=1, ky=1)
+    pedersen_spline = RectBivariateSpline(np.arange(0,amp_sh[0]+1), 
+                                        np.arange(1,amp_sh[1]+1), sigmaP_, 
+                                        kx=1, ky=1)
+    
+    #Evaluate spline representation at evaluation locations specified
+    hall_interp = hall_spline.ev(mlt, 90-mlat)
+    pedersen_interp = pedersen_spline.ev(mlt, 90-mlat)
+
+    return (hall_interp.reshape(shape), pedersen_interp.reshape(shape))
+
+
+def robinson_EUV(lon, lat, sigmaH, sigmaP, time, starlight = 0, F107 = 100,
+              dipole=False, calibration = 'MoenBrekke1993'):
+    """ calculate conductance at lat, lon for given time
+    based on Robinson empirical FAC model + EUV contribution, from the functions
+    defined above
+    
+
+    Parameters
+    ----------
+    lon: array
+        geographic longitudes [deg]
+    lat: array
+        geograhpic latitudes [deg]
+    sigmaH: 2D array
+        Hall conductance [mho] on the native AMPERE grid.
+    sigmaP: 2D array
+        Pedersen conductance [mho] on the native AMPERE grid.          
+    time: datetime
+        time, used to get solar zenith angles and for apex coordinate conversion
+    starlight: float, optional
+        constant to add to conductance, often small (e.g. Strobel et al. 1980 https://doi.org/10.1016/0032-0633(80)90050-1)
+        could be used to include "background-conductance" 
+    F107: float, optional
+        F107 index - used to scale EUV conductance. Default is 100
+    dipole : bool, optional
+        set to True if lat and lon are dipole coordinates. Default is False
+    calibration: string, optional
+        calibration to use in EUV_conductance calculation. See documentation
+        of EUV_conductance function for info
+        
+    Returns
+    -------
+        Two arrays of conductances [mho] for each lat, lon, 
+        one for total Hall and one for total Pedersen 
+    
+    """
+    
+    lat, lon = np.array(lat, ndmin = 1), np.array(lon, ndmin = 1)
+    shape = np.broadcast(lat, lon).shape
+    lat, lon = lat.flatten(), lon.flatten()
+    
+    cd = Dipole(time.year)       
+    if dipole:
+        mlat, mlon = lat, lon # input lat, lon is centered dipole
+        lat, lon = cd.mag2geo(lat, lon) # to geographic
+    else:
+        a = apexpy.Apex(time, 110) 
+        mlat, mlon = a.geo2apex(lat, lon, 110) # to mag
+    mlt = cd.mlon2mlt(mlon, time)     # get mlt
+    
+    # solar zenith angles for EUV conductances
+    sza = sunlight.sza(lat, lon, time)
+        
+    
+    EUVh, EUVp = EUV_conductance(sza, F107, 'hp', calibration = calibration) # EUV
+    rc_hall, rc_pedersen = robinson(mlat, mlt, sigmaH, sigmaP) # auroral
+    
+    return (np.sqrt(rc_hall**2 + EUVh**2 + starlight**2)).reshape(shape), (np.sqrt(rc_pedersen**2 + EUVp**2 + starlight**2)).reshape(shape)
