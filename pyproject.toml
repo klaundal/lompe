@@ -13,6 +13,9 @@ dependencies = [
     "ppigrf",
     "scipy",
     "xarray",
+    "dipole @ git+https://github.com/smithara/dipole.git@packaging#egg=dipole",
+    "polplot @ git+https://github.com/smithara/polplot.git@packaging#egg=polplot",
+    "secsy @ git+https://github.com/smithara/secsy.git@packaging#egg=secsy",
 ]
 
 [project.optional-dependencies]
