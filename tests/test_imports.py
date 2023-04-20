@@ -16,8 +16,8 @@ def test_utils():
 
 
 def test_dipole():
-    import lompe.dipole
-    from lompe.dipole import Dipole
+    import dipole
+    from dipole import Dipole
 
 
 def test_polplot():
