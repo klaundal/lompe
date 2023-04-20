@@ -1,5 +1,9 @@
 Overview
 ========
+
+.. image:: https://mybinder.org/badge_logo.svg
+ :target: https://mybinder.org/v2/gh/klaundal/lompe/main
+
 LOcal Mapping of Polar ionospheric Electrodynamics (Lompe)
 
 Lompe is a tool for estimating regional maps of ionospheric electrodynamics using measurements of plasma convection and magnetic field disturbances in space and on ground. 
