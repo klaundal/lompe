@@ -6,7 +6,10 @@ class is defined here.
 
 """
 import numpy as np
-
+class ShapeError(Exception):
+     pass
+class ArgumentError(Exception):
+     pass
 class Data(object):
     def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, scale = None, error = 0):
         """ 
@@ -90,7 +93,7 @@ class Data(object):
             'convection'     - F-region plasma convection data - mapped to R
             'Efield'         - electric field - mapped to R
         label: string, optional
-            A name for the dataset. If not set, the name will be hte same as the
+            A name for the dataset. If not set, the name will be the same as the
             datatype. Setting a label can be useful for distinguishing datasets
             of the same type from different sources (e.g. DMSP and SuperDARN)
         LOS: array, optional
@@ -117,7 +120,7 @@ class Data(object):
         datatype = datatype.lower()
 
         if datatype not in ['ground_mag', 'space_mag_full', 'space_mag_fac', 'convection', 'efield', 'fac']:
-            print('datatype not recognized')
+            raise ArgumentError(f'datatype not recognized: {datatype}')
             return(None)
 
         scales = {'ground_mag':100e-9, 'space_mag_full':200e-9, 'space_mag_fac':200e-9, 'convection':100, 'efield':10e-3, 'fac':1e-6}
@@ -133,7 +136,7 @@ class Data(object):
         self.values = values
         if coordinates is not None:
             if datatype.lower() == 'fac':
-                print('Warning: FAC data must be defined on the whole Emodel.grid_J, but this is not checked.')
+                raise UserWarning('Warning: FAC data must be defined on the whole Emodel.grid_J, but this is not checked.')
             if coordinates.shape[0] == 2:
                 self.coords = {'lon':coordinates[0], 'lat':coordinates[1]}
             if coordinates.shape[0] == 3:
@@ -168,7 +171,7 @@ class Data(object):
 
         # check that number of data points and coordinates match:
         if self.coords['lat'].size != np.array(self.values, ndmin = 2).shape[1]:
-            raise Exception('not the same number of coordinates and data points')
+            raise ShapeError('not the same number of coordinates and data points')
 
         # remove nans from the dataset:
         iii = np.isfinite(self.values)
