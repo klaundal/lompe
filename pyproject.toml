@@ -46,6 +46,8 @@ dev = [
 where = ["."]
 include = ["lompe"]
 
+[tool.setuptools_scm]
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
