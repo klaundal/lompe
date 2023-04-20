@@ -26,4 +26,4 @@ def test_polplot():
 
 
 def test_secsy():
-    import lompe.secsy
+    import secsy

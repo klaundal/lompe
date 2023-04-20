@@ -2,8 +2,8 @@
 import apexpy
 import numpy as np
 from scipy.interpolate import RectBivariateSpline, griddata
-from lompe.secsy import get_SECS_B_G_matrices, get_SECS_J_G_matrices
-from lompe.secsy import cubedsphere as cs
+from secsy import get_SECS_B_G_matrices, get_SECS_J_G_matrices
+from secsy import cubedsphere as cs
 from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
 from dipole import Dipole
