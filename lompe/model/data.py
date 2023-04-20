@@ -6,10 +6,14 @@ class is defined here.
 
 """
 import numpy as np
+
 class ShapeError(Exception):
      pass
+     
 class ArgumentError(Exception):
      pass
+
+
 class Data(object):
     def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, scale = None, error = 0):
         """ 
