@@ -15,7 +15,8 @@ class Emodel(object):
     def __init__(self, grid,
                        Hall_Pedersen_conductance,
                        epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
-                       dipole = False # set to True to use dipole field and dipole coords
+                       dipole = False, # set to True to use dipole field and dipole coords
+                       perfect_conductor_radius = None
                 ):
         """
         Electric field model
@@ -47,8 +48,16 @@ class Emodel(object):
             Set to True to use dipole magnetic field instead of IGRF. If True, all
             coords are assumed to be dipole coordinates. Useful for idealized calculations.
             Default is False
+        perfect_conductor_radius: float, optional
+            An option for different handling of ground induced currents. This keyword can be used to specify
+            the radius (< grid.R) of a spherical shell that is a perfect conductor, at which induced currents 
+            in the ground cancel Br from space currents (Juusola et al. 2016 doi:10.1002/2016JA022961). If 
+            set to None (default), ground delta B will be modeled exclusively in terms of space currents
         """
-
+        # options
+        self.perfect_conductor_radius = perfect_conductor_radius
+        self.dipole = dipole
+        self.epoch = epoch
 
         # set up inner and outer grids:
         self.grid_J = grid # inner
@@ -76,8 +85,6 @@ class Emodel(object):
         self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance)
 
         # calculate main field values for all grid points
-        self.dipole = dipole
-        self.epoch = epoch
         refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
         if self.dipole:
             Bn, Bu = Dipole(self.epoch).B(self.lat_E, self.grid_E.R * 1e-3)
@@ -96,7 +103,7 @@ class Emodel(object):
         self.De, self.Dn = self.grid_J.get_Le_Ln()
         self.Ddiv = self.grid_J.divergence()
 
-        # Matrices to evaluate electric field on inner grid:
+        # Matrices to json.loadsuate electric field on inner grid:
         self.Ee, self.En = self._E_matrix()
         self.Ee, self.En = self.Ee, self.En
 
@@ -149,7 +156,71 @@ class Emodel(object):
             self.hall_conductance     = lambda lon = self.grid_J.lon, lat = self.grid_J.lat: _h(lon, lat)
             self.pedersen_conductance = lambda lon = self.grid_J.lon, lat = self.grid_J.lat: _p(lon, lat)
 
-
+    def save(self, time=0, parameters_to_save='all', **kwargs):
+        """
+        For saving the model and/or the lompe output
+    
+        Parameters
+        ----------
+        model : lompe.Emodel
+            lompe model object.
+        parameters_to_save : list, optional
+            string or list informing what shall be in the a xarray dataset. 
+            possible stand alone strings or strings in list: 'all', 'all model', 'all output', 'model', 
+            'data locations', 'efield', 'convection', 'ground_mag', 'electric_current', 'space_mag_fac',
+            'space_mag_full', 'fac', 'hall', 'pedersen', 'secs_current'
+            
+            The default is 'all'
+    
+             result of each string:
+            → 'all' will save all model information (read 'all model') and all lompe outputs (read 'all output')
+            
+            → 'all model' will save model amplitudes, conductance (allowing the recreation
+               of the lompe Emodel object) and data locations (allowing the creation of a DummyData object that has reduced
+               functionality compared to lompe Data object)
+            → 'all output' will save: ['efield','convection', 'ground_mag', 'electric_current', 
+                                                 'space_mag_fac', 'space_mag_full','fac', 'hall','pedersen','secs_current']
+                (read each item)
+            → 'efield' will save the electric field using Emodel.E
+            → 'convection' will save the convection using Emodel.v
+            → 'ground_mag' will save the ground magnetic field using Emodel.B_ground
+            → 'electric_current' will save the ionospheric currents using Emodel.j
+            → 'space_mag_fac' wil save the magnetic field resulting from the 
+                field aligned currents using Emodel.B_space_FAC
+            → 'space_mag_fall' will save the full space magnetic field using Emodel.B_space
+            → 'fac' will save the field aligned currents using Emodel.FAC
+            → 'hall' will save the hall conductance using Emodel.hall_conductance,
+                this will always be activated if the 'model' is saved
+            → 'pedersen' will save the pedersen conductance using Emodel.pedersen_conductance.
+                this will always be saved if the 'model' is saved
+            → 'secs_current' will save the horizontal ionospheric currents using
+                secs pole amplitudes using Emodel.get_SECS_currents
+            
+            read the doc strings of each relevant function for more information
+            
+        time : int/float/datetime/timedelta, optional
+            a quantity that indentifies the time of the dataset. 
+            The default is 0 and will be changed when append is True to 1+ the maximum of the existing file. 
+            It is recommened to choose a value when working with multiple times.
+        **kwargs : dict
+            key arguments to be passed to the save_model function.
+            (read save_model doc string for more information)
+    
+        Raises
+        ------
+        ArgumentError
+            An error for when there is a problem with one of the provided arguments.
+    
+        Returns
+        -------
+        Dataset : xarray.Dataset
+            An xarray dataset containing the requested information and information for the cubed sphere grids 
+            that will allow them to be recreated.
+    
+        """
+        from lompe.utils import save_model
+        return save_model(self, time=time, save=parameters_to_save, **kwargs)
+        
     def run_inversion(self, l1 = 0, l2 = 0,
                       data_density_weight = True, perimeter_width = 10,
                       **kwargs):
@@ -418,8 +489,8 @@ class Emodel(object):
         He, Hn, Hu = get_SECS_B_G_matrices(lat, lon, r, self.lat_J, self.lon_J,
                                            current_type = 'divergence_free',
                                            RI = self.R,
-                                           singularity_limit = self.secs_singularity_limit)
-
+                                           singularity_limit = self.secs_singularity_limit,
+                                           induction_nullification_radius = self.perfect_conductor_radius)
 
         H = np.vstack((He, Hn, Hu))
 

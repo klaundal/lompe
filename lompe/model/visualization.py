@@ -375,8 +375,30 @@ def plot_datasets(ax, model, dtype = 'convection', scale = None, **kwargs):
     ax.set_ylim(*ylim)
 
     return(qs)
+def plot_locations(ax, model, dtype='convection', **kwargs):
+    dtype = dtype.lower()
 
+    if dtype not in model.data.keys():
+        raise Exception('No such data type named {}'.format(dtype))
 
+    if len(model.data[dtype]) == 0: 
+        return None # no data to be plotted
+    # set kwargs for quiver:
+    if 'color' not in kwargs.keys():
+        kwargs['color'] = 'C1'
+
+    if 'zorder' not in kwargs.keys():
+        kwargs['zorder'] = 1
+    
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    for dataset in model.data[dtype]:
+        lon, lat = dataset.coords['lon'], dataset.coords['lat']
+        x, y= model.grid_J.projection.geo2cube(lon, lat)
+        scat = ax.scatter(x, y, **kwargs)
+
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    return(scat)
 
 def plot_potential(ax, model, **kwargs):
     """ plot electric potential on axis 
@@ -507,7 +529,7 @@ def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
     
 
 
-def lompeplot(model, figheight = 9, include_data = False, apex = None, time = None, 
+def lompeplot(model, figheight = 9, include_data = False, show_data_location= False, apex = None, time = None, 
                      savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
                      debug = False, return_axes = False):
     """ produce a summary plot of lompe parameters. 
@@ -523,6 +545,9 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
             and (width, height) is the figsize given to matplotlib.pyplot.figure
         include_data: bool, optional
             set to True if you want to also plot data. False (default) if not
+        show_data_location: bool, optional
+            will scatter the locations of data. The default is False and the locations
+            won't be plotted
         apex: apexpy.Apex object, optional
             specify if you want magnetic coordinate grid instead of geographic
         time: datetime, optional
@@ -574,6 +599,8 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
     ax = axes[0, 0]
     plot_quiver(ax, model, 'convection')
     plot_potential(ax, model)
+    if show_data_location:
+        plot_locations(ax, model, 'convection')
     if include_data:
         plot_datasets(ax, model, 'convection')
     ax.set_title('Convection velocity and electric potential')
@@ -583,6 +610,10 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
     ax = axes[0, 1]
     plot_quiver(  ax, model, 'space_mag_fac')
     plot_contour( ax, model, 'fac')
+    if show_data_location:
+        plot_locations(ax, model, 'space_mag_fac')
+        plot_locations(ax, model, 'fac')
+
     if include_data:
         plot_datasets(ax, model, 'space_mag_fac')
         plot_datasets(ax, model, 'space_mag_full')
@@ -593,6 +624,8 @@ def lompeplot(model, figheight = 9, include_data = False, apex = None, time = No
     ax = axes[0, 2]
     plot_quiver(  ax, model, 'ground_mag')
     plot_contour( ax, model, 'ground_mag', vertical = True)
+    if show_data_location:
+        plot_locations(ax, model, 'ground_mag')
     if include_data:
         plot_datasets(ax, model, 'ground_mag')
     ax.set_title('Ground magnetic field')
