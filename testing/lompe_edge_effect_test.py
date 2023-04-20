@@ -16,7 +16,7 @@ KML, 2022-01-12
 
 import numpy as np
 import lompe
-from lompe.secsy import cubedsphere as cs
+from secsy import cubedsphere as cs
 import matplotlib.pyplot as plt
 
 point = (5.3, 60.4)  # position of grid (shouldn't matter)

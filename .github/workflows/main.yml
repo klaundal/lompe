@@ -23,6 +23,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install lompe
         run: |
-          pip install -e .[dev,extras]
+          pip install -e .[dev,extras,deps-from-github]
       - name: Test lompe
         run: python -m pytest

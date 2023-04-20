@@ -15,12 +15,12 @@ plots.
 import matplotlib.pyplot as plt
 import numpy as np
 import apexpy
-from lompe.dipole import Dipole
+from dipole import Dipole
 from scipy.interpolate import griddata
 from matplotlib import rc
 from matplotlib.patches import Polygon, Ellipse
 from matplotlib.collections import PolyCollection, LineCollection
-from lompe.polplot import Polarplot
+from polplot import Polarplot
 
 rc('font', **{'family': 'sans-serif', 'sans-serif': ['Verdana']})
 rc('text', usetex=False)

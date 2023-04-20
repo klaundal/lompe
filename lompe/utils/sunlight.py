@@ -4,7 +4,7 @@ import pandas as pd
 import os
 import numpy as np
 from lompe.utils.time import date_to_doy, is_leapyear
-from lompe.dipole.dipole import sph_to_car, car_to_sph, subsol
+from dipole import sph_to_car, car_to_sph, subsol
 
 d2r = np.pi / 180
 r2d = 180 / np.pi

@@ -6,7 +6,7 @@ import os
 import apexpy
 from scipy.interpolate import interp1d
 from lompe.utils import sunlight
-from lompe.dipole.dipole import Dipole
+from dipole import Dipole
 from scipy.interpolate import RectBivariateSpline
 
 
