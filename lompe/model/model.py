@@ -974,7 +974,6 @@ def save_model(model, save='all',
     if not suppress_print:
         print(f'saving................. : {to_save}')
     from xarray import Dataset
-    from astropy import units
     import warnings
     warnings.simplefilter('ignore', (RuntimeWarning))
     data_vars1= {}
@@ -998,23 +997,23 @@ def save_model(model, save='all',
             data= data.reshape(-1, *model.grid_E.shape)
         vecs= vectors[dtype]
         if 'mag' in dtype:
-            unit= units.T
+            unit= 'Tesla'
         elif 'current' in dtype :
-            unit= units.A/units.m
+            unit= 'Amps/Meter'
         elif dtype=='efield':
-            unit= units.V/units.m
+            unit= 'Volts/Meter'
         elif dtype=='fac':
-            unit= units.A/(units.m**2)
+            unit= 'Amps/(Meter^2)'
         elif dtype=='convection':
-            unit= units.m/units.s
+            unit= 'Meter/Second'
         elif 'conductance' in funcs[dtype]:
-            unit= units.siemens
+            unit= 'siemens'
         else:
             raise ArgumentError(f'to save string not known: {dtype}\nknown strings are: {["efield", "convection", "ground_mag","electric_current", "space_mag_fac", "space_mag_full","fac", "hall","pedersen","secs_current"]}')
         if data[0].size == model.grid_E.xi.size:
             grid= model.grid_E
             data_vars1.update({f'{dtype}{vec}': (['time', 'eta', 'xi'], [data[i].reshape(grid.shape)], 
-                                                  {'units':str(unit)}) for i, vec in enumerate(vecs)})
+                                                  {'units':unit}) for i, vec in enumerate(vecs)})
 
         else:
             grid = model.grid_J
@@ -1028,7 +1027,7 @@ def save_model(model, save='all',
 
     if save_model:
         data_vars1.update({'model_vector':(['time', 'eta', 'xi'], [model.m.reshape(model.grid_E.shape)],
-                                  {'units':str(units.C/units.m),
+                                  {'units':'Coulomb/Meter',
                                    'description':'model vector (the m attribute of the lompe model object) must be flattened before using as model attribute'})})                                                                  
     if data_locs: data_vars1.update(data_locs_to_dict(model))
 
