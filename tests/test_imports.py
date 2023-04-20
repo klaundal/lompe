@@ -21,8 +21,8 @@ def test_dipole():
 
 
 def test_polplot():
-    import lompe.polplot
-    from lompe.polplot import Polarplot
+    import polplot
+    from polplot import Polarplot
 
 
 def test_secsy():
