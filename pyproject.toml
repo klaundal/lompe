@@ -26,9 +26,9 @@ local = [
 ]
 # To use the online versions instead
 deps-from-github = [
-    "dipole @ git+https://github.com/smithara/dipole.git@packaging#egg=dipole",
-    "polplot @ git+https://github.com/smithara/polplot.git@packaging#egg=polplot",
-    "secsy @ git+https://github.com/smithara/secsy.git@packaging#egg=secsy",
+    "dipole @ git+https://github.com/klaundal/dipole.git@main#egg=dipole",
+    "polplot @ git+https://github.com/klaundal/polplot.git@main#egg=polplot",
+    "secsy @ git+https://github.com/klaundal/secsy.git@main#egg=secsy",
 ]
 extras = [
     "astropy",
