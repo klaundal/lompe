@@ -1,10 +1,11 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "setuptools_scm[toml]"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lompe"
-version = "1.1.0"
+dynamic = ["version"]
+# Note: To install, must specify one of [local] or [from_github]
 dependencies = [
     "apexpy",
     "matplotlib",
@@ -13,12 +14,22 @@ dependencies = [
     "ppigrf",
     "scipy",
     "xarray",
+]
+
+[project.optional-dependencies]
+# For the case where you have already installed these locally
+#  (e.g. with a --editable install)
+local = [
+    "dipole",
+    "polplot",
+    "secsy",
+]
+# To use the online versions instead
+deps-from-github = [
     "dipole @ git+https://github.com/smithara/dipole.git@packaging#egg=dipole",
     "polplot @ git+https://github.com/smithara/polplot.git@packaging#egg=polplot",
     "secsy @ git+https://github.com/smithara/secsy.git@packaging#egg=secsy",
 ]
-
-[project.optional-dependencies]
 extras = [
     "astropy",
     "cdflib",
