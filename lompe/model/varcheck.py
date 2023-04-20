@@ -63,9 +63,9 @@ def check_input(func):
 
         # set default values
         if argdict['lat'] is None:            
-            argdict['lat'] = model.lat_E if 'B' in func.__name__ else model.lat_J
+            argdict['lat'] = model.lat_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.lat_J
         if argdict['lon'] is None:            
-            argdict['lon'] = model.lon_E if 'B' in func.__name__ else model.lon_J
+            argdict['lon'] = model.lon_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.lon_J
         if 'r' in argdict.keys() and argdict['r'] is None:       
             argdict['r'] = 2 * model.R - RE if 'cf' in func.__name__ else RE
 

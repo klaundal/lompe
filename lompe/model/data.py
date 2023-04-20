@@ -160,7 +160,7 @@ class Data(object):
             self.components = [0,1] #2021-10-29: jreistad added this to work with how components is used in model.py. Could avoid this slightly non-inututuve value by modifying model.py instead.
         else:
             self.los = None
-            if components == 'all':
+            if type(components) == str and components == 'all':
                 self.components = [0, 1, 2]
             else: # components is specified as an int or a list of ints
                 self.components = np.sort(np.array(components).flatten())
