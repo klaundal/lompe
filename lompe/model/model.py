@@ -7,7 +7,7 @@ from lompe.secsy import cubedsphere as cs
 from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
 from lompe.dipole import Dipole
-from .varcheck import check_input
+from .varcheck import check_input, extrapolation_check
 
 RE = 6371.2e3 # Earth radius in meters
 
@@ -360,7 +360,7 @@ class Emodel(object):
 
         return Ee, En
 
-
+    @extrapolation_check
     def E(self, lon = None, lat = None):
         """
         Calculate electric field vector components
@@ -442,7 +442,7 @@ class Emodel(object):
 
         return Ve, Vn
 
-
+    @extrapolation_check
     def v(self, lon = None, lat = None):
         """
         Calculate velocity vector components
@@ -566,7 +566,7 @@ class Emodel(object):
         return BBB_df + BBB_cf
 
 
-
+    @extrapolation_check
     def B_ground(self, lon = None, lat = None, r = None):
         """
         Calculate ground magnetic field perturbation vectors
@@ -605,7 +605,7 @@ class Emodel(object):
 
         return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
 
-
+    @extrapolation_check
     def B_space(self, lon = None, lat = None, r = None, include_df = True):
         """
         Calculate space magnetic field perturbation vectors
@@ -651,7 +651,7 @@ class Emodel(object):
 
         return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
 
-
+    @extrapolation_check
     def B_space_FAC(self, lon = None, lat = None, r = None):
         """
         Calculate the space magnetic field perturbation vectors that
@@ -685,7 +685,7 @@ class Emodel(object):
 
         return self.B_space(lon = lon, lat = lat, r = r, include_df = False)
 
-
+    @extrapolation_check
     def FAC_matrix(self, lon = None, lat = None):
         """
         Calculate matrix that relates FAC densities to electric field model

@@ -3,6 +3,7 @@ import numpy as np
 from functools import wraps
 from itertools import combinations
 import inspect
+import warnings
 
 RE = 6371.2e3
 
@@ -25,6 +26,35 @@ def get_default_args(func):
         if v.default is not inspect.Parameter.empty
     }
 
+def extrapolation_check(func):
+    """ checks if the coordinates provided are inside or outside the model
+        vector grid
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        argnames = inspect.getfullargspec(func)[0]
+        
+        model = args[0]
+        argdict = get_default_args(func) # start by collecting defaults
+        l = len(args)
+        if l > 1:
+            named_args = dict(zip(argnames[1:l], args[1:]))
+            argdict.update(named_args) # add positional arguments
+        argdict.update(kwargs)
+        if argdict['lat'] is None:
+            return func(model, **argdict)
+
+        # creates warning if there are points outside the grid
+        if not (func.__name__.startswith('_') and func.__name__.endswith('matrix')) and not np.all(model.grid_E.ingrid(argdict['lon'], argdict['lat'])):
+            warnings.warn('Some points of evaluation are outside the grid and are therefore poorly informed', UserWarning)
+        
+        params = ['r', 'lat', 'lon'] if 'r' in argdict.keys() else ['lat', 'lon']
+        shape = np.broadcast(*(argdict[key] for key in params)).shape
+
+
+
+        return func(model, **argdict)
+    return wrapper
 
 def check_input(func):
     """ checks that the inputs to get_matrix functions in Model object
@@ -60,15 +90,13 @@ def check_input(func):
         if len(missing) > 0: # raise excption if anything is missing
             raise Exception('check_input: parameters {} missing from call to {}'.format(missing, func.__name__)) 
 
-
         # set default values
-        if argdict['lat'] is None:            
+        if argdict['lat'] is None:
             argdict['lat'] = model.lat_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.lat_J
-        if argdict['lon'] is None:            
+        if argdict['lon'] is None:
             argdict['lon'] = model.lon_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.lon_J
         if 'r' in argdict.keys() and argdict['r'] is None:       
             argdict['r'] = 2 * model.R - RE if 'cf' in func.__name__ else RE
-
         # list of parameters passed to func
         params = ['r', 'lat', 'lon'] if 'r' in argdict.keys() else ['lat', 'lon']
 
