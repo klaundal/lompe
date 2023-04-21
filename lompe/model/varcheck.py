@@ -26,6 +26,7 @@ def get_default_args(func):
         if v.default is not inspect.Parameter.empty
     }
 
+
 def extrapolation_check(func):
     """ checks if the coordinates provided are inside or outside the model
         vector grid
@@ -48,13 +49,9 @@ def extrapolation_check(func):
         if not (func.__name__.startswith('_') and func.__name__.endswith('matrix')) and not np.all(model.grid_E.ingrid(argdict['lon'], argdict['lat'])):
             warnings.warn('Some points of evaluation are outside the grid and are therefore poorly informed', UserWarning)
         
-        params = ['r', 'lat', 'lon'] if 'r' in argdict.keys() else ['lat', 'lon']
-        shape = np.broadcast(*(argdict[key] for key in params)).shape
-
-
-
         return func(model, **argdict)
     return wrapper
+
 
 def check_input(func):
     """ checks that the inputs to get_matrix functions in Model object
