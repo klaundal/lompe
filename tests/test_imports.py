@@ -16,14 +16,14 @@ def test_utils():
 
 
 def test_dipole():
-    import lompe.dipole
-    from lompe.dipole import Dipole
+    import dipole
+    from dipole import Dipole
 
 
 def test_polplot():
-    import lompe.polplot
-    from lompe.polplot import Polarplot
+    import polplot
+    from polplot import Polarplot
 
 
 def test_secsy():
-    import lompe.secsy
+    import secsy

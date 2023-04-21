@@ -1,22 +1,23 @@
 channels:
   - conda-forge
 dependencies:
-  - astropy=5.1
-  - cdflib=0.4.7
-  - fortran-compiler
+  - python=3.10
+  - pip
   - ipykernel
+  - pytest
+  - fortran-compiler
+  - astropy=5.1
   - matplotlib=3.6
   - mscorefonts=0.0.1
   - netcdf4=1.6
   - numpy=1.23
   - pandas=1.5
-  - pip
-  - python=3.8
   - scipy=1.9
   - xarray=2022.10
   - pip:
     - aacgmv2==2.6.2
     - apexpy==1.1.0
+    - cdflib==0.4.7
     - madrigalWeb==3.2.2
     - ppigrf==1.0.0
     - pyamps==1.5.2

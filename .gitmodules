@@ -1,9 +1,0 @@
-[submodule "secsy"]
-	path = lompe/secsy
-	url = https://github.com/klaundal/secsy
-[submodule "polplot"]
-	path = lompe/polplot
-	url = https://github.com/klaundal/polplot
-[submodule "dipole"]
-	path = lompe/dipole
-	url = https://github.com/klaundal/dipole

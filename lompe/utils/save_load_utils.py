@@ -381,7 +381,7 @@ def load_model(file, time='first'):
     """
     import xarray as xr
     from lompe.model import Emodel
-    from lompe.secsy import cubedsphere as cs
+    from secsy import cubedsphere as cs
     from functools import partial
     import json
     
@@ -433,7 +433,7 @@ def load_grid(file):
     """
     import xarray as xr
     from lompe.model import Emodel
-    from lompe.secsy import cubedsphere as cs
+    from secsy import cubedsphere as cs
     from functools import partial
     import json
     
