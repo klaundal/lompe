@@ -1,5 +1,9 @@
 Overview
 ========
+
+.. image:: https://mybinder.org/badge_logo.svg
+ :target: https://mybinder.org/v2/gh/klaundal/lompe/main
+
 LOcal Mapping of Polar ionospheric Electrodynamics (Lompe)
 
 Lompe is a tool for estimating regional maps of ionospheric electrodynamics using measurements of plasma convection and magnetic field disturbances in space and on ground. 
@@ -25,6 +29,54 @@ We recommend to use the examples to learn how to use Lompe, but the general work
     >>> # or calculate some quantity, like plasma velocity:
     >>> ve, vn = model.v(mylon, mylat)
 
+Install
+=======
+
+(NB: In the below, if you do not have mamba, replace `mamba` with `conda`)
+
+Option 0: using pip directly
+----------------------------
+
+The package is pip-installable from GitHub directly with::
+
+    pip install "lompe[deps-from-github,extras] @ git+https://github.com/klaundal/lompe.git@main"
+
+You can omit some of the optional packages by removing ``,extras``.
+
+This could also be done within a minimal conda environment created with, e.g. ``mamba create -n lompe python=3.10 fortran-compiler``
+
+Option 1: without development install of dipole, polplot, secsy
+---------------------------------------------------------------
+
+Get the code, create a suitable conda environment, then use pip to install the package in editable (development) mode::
+
+    git clone https://github.com/klaundal/lompe
+    mamba env create -f lompe/binder/environment.yml -n lompe
+    mamba activate lompe
+    pip install --editable ./lompe[extras,deps-from-github]
+
+Editable mode (``-e`` or ``--editable``) means that the install is directly linked to the location where you cloned the repository, so you can edit the code.
+
+Note that in this case, the ``deps-from-github`` option means that the ``dipole, polplot, secsy`` packages are installed directly from their source on GitHub.
+
+Option 2: including development install of dipole, polplot, secsy
+-----------------------------------------------------------------
+
+Get all the repositories, create a suitable conda environment, then use pip to install all of them in editable (development) mode::
+
+    git clone https://github.com/klaundal/dipole
+    git clone https://github.com/klaundal/polplot
+    git clone https://github.com/klaundal/secsy
+    git clone https://github.com/klaundal/lompe
+    mamba env create -f lompe/binder/environment.yml -n lompe
+    mamba activate lompe
+    pip install -e ./dipole -e ./secsy -e ./polplot -e ./lompe[local,extras]
+
+Note that in this case, all four are installed in editable mode. And the ``local`` option instructs the lompe install to use those local versions of the package.
+
+Hint: you can use ``pip list | grep -E 'dipole|polplot|secsy|lompe'`` to identify which versions you are using.
+
+Hint: you can use ``pytest ./lompe/tests`` to check it installed correctly.
 
 Dependencies
 ============
@@ -45,32 +97,6 @@ You should have the following modules installed:
 - `pydarn <https://github.com/SuperDARN/pydarn/>`_ (if you use the SuperDARN data preprocessing scripts)
 
 You should also have git version >= 2.13
-
-
-Install
-=======
-Start by cloning the repository, and get the code for the submodules::
-
-    git clone https://github.com/klaundal/lompe
-    cd lompe
-    git submodule init
-    git submodule update
-
-Then there are two options for how to make it possible to import and use lompe from any location. The first option should be fairly automatic, while the other option requires you to install all the dependencies yourself. 
-
-Option 1
---------
-The first option is to create a virtual environment with ``conda``, where all dependencies are automatically installed. In this example, the environment is called ``lompe_env``:: 
-
-    conda env create --name lompe_env --file binder/environment.yml
-    conda activate lompe_env
-    pip install -e .[extras]
-
-Option 2
---------
-The second option is to add the path to the lompe folder to PYTHONPATH, and make sure that all dependencies are installed. This option may be good if you plan to make changes to the lompe code and have the changes available immediately. 
-
-
 
 Lompe papers
 ============
