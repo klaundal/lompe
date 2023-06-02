@@ -314,7 +314,6 @@ def plot_contour(ax, model, dtype, vertical = False, **kwargs):
     return(ax.contourf(xi, eta, z, **kwargs))
 
 
-
 def plot_datasets(ax, model, dtype = 'convection', scale = None, **kwargs):
     """ make quiverplot for given dataset
 
@@ -710,6 +709,547 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     else:
         return fig
 
+def add_background(ax, xlim, ylim, color='k', alpha=0.8, zorder=-1):
+    
+    return ax
+
+def mapPlot(ax, var, grid, model, mapDict=None, includeData=None, JBoundary=None, background=None):
+    
+    cc = ax.pcolormesh(grid.xi, grid.eta, var, **mapDict)
+    
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    if isinstance(background, dict):
+        ax.fill_between(x=xlim, y1=[ylim[0]]*2, y2=[ylim[1]]*2, **background)
+    
+    # Plot grid edge
+    if isinstance(JBoundary, dict):
+        ximin, ximax = np.min(model.grid_J.xi), np.max(model.grid_J.xi)
+        etamin, etamax = np.min(model.grid_J.eta), np.max(model.grid_J.eta)
+        ax.plot([ximin, ximax], [etamin]*2, **JBoundary)
+        ax.plot([ximin, ximax], [etamax]*2, **JBoundary)
+        ax.plot([ximin]*2, [etamin, etamax], **JBoundary)
+        ax.plot([ximax]*2, [etamin, etamax], **JBoundary)
+    
+    # Plot data
+    if isinstance(includeData, dict):
+        dtypes = includeData['dtypes']
+        colors = includeData['colors']
+        incData = includeData.copy()
+        incData.pop('dtypes')
+        incData.pop('colors')
+        for dtype, dcol in zip(dtypes, colors):
+            if len(model.data[dtype]) == 0:
+                continue
+            for dataset in model.data[dtype]:
+                xi_d, eta_d = model.grid_E.projection.geo2cube(dataset.coords['lon'], dataset.coords['lat'])
+                ax.plot(xi_d, eta_d, color=dcol, label=dtype, **incData)
+    
+    # Pretty
+    ax.set_aspect('equal')
+    ax.set_ylim(ylim)
+    ax.set_xlim(xlim)
+    
+    return ax, cc
+
+def resolutionplot(model, apex=None, savekw = None, return_axes = False,
+                   mapDict=None, background=None, JBoundary=None, includeData= None,
+                   unit='km', figsize=(20,14), fs=20):
+    """ produce a plot of spatial resolution. 
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+        mapDict: dict, optional
+            Arguments for plotting map
+        background: dict, optional
+            Arguments for adding background when using mask
+        JBoundary: dict, optional
+            Arguments for showing the extent of grid_J
+        includeData, dict, optional
+            Arguments for illustration of data from inversion
+        unit: string, optional
+            Unit of spatial resolution shown on colorbar.
+        figsize: tuple, optional
+            Size of figure.
+        fs: int, optional
+            Fontsize of text in plot.
+
+    """
+
+    # Set up figures
+    fig = plt.figure(figsize = figsize)
+    axes = [plt.subplot2grid((32, 2), (0, 0), rowspan = 30),
+            plt.subplot2grid((32, 2), (0, 1), rowspan = 30)]
+    cax = plt.subplot2grid((32, 10), (31, 0), colspan = 7)
+    
+    # Format axes
+    for ax in axes:
+        format_ax(ax, model, apex = apex, colors='gray')
+    
+    # Color scale
+    vmin = np.min(np.hstack((model.xiRes[model.xiResFlag > 0].flatten(), 
+                             model.etaRes[model.etaResFlag > 0].flatten())))
+    vmax = np.max(np.hstack((model.xiRes[model.xiResFlag > 0].flatten(), 
+                             model.etaRes[model.etaResFlag > 0].flatten())))
+    
+    # Default settings
+    if not isinstance(mapDict, dict):
+        mapDict     = {'vmin':vmin, 'vmax':vmax, 'cmap':'Reds', 'zorder':0}
+    
+    if not isinstance(background, dict):
+        background  = {'color':'k', 'alpha':0.8, 'zorder':-1}
+    
+    if not isinstance(JBoundary, dict):
+        JBoundary   = {'linewidth':0.8, 'color':'tab:blue'}
+
+    if not isinstance(includeData, dict):
+        includeData = {'dtypes':['ground_mag', 'space_mag_fac', 'convection'],
+                       'colors':['k', 'tab:green', 'tab:blue'],
+                       'marker':'*', 'linestyle':'', 'alpha':0.8, 'zorder':1}
+    
+    var = np.ma.array(model.xiRes, mask=model.xiResFlag < 1)
+    _, cc = mapPlot(axes[0], var, model.grid_E, model, mapDict=mapDict, 
+                includeData=includeData, JBoundary=JBoundary, background=background)
+    
+    var = np.ma.array(model.etaRes, mask=model.etaResFlag < 1)
+    _, cc = mapPlot(axes[1], var, model.grid_E, model, mapDict=mapDict, 
+                includeData=includeData, JBoundary=JBoundary, background=background)
+    
+    # Add legend
+    lgnd = ax.legend(loc=3, bbox_to_anchor=(0.4, -0.18), fontsize=fs)
+    for lgndhandle in lgnd.legendHandles:
+        lgndhandle._markersize = fs
+    
+    # Add colorbar
+    cbar = fig.colorbar(cc, cax=cax, orientation="horizontal")
+    cax.set_xticklabels(cax.get_xticklabels(), fontsize=fs)
+    cax.set_xlabel(unit, fontsize=fs)
+    
+    # Add title
+    axes[0].text(0.5, 1.02, 'Resolution in $\u03be$ [{}]'.format(unit), 
+                 ha='center', va='bottom', fontsize=fs, transform=axes[0].transAxes)
+    axes[1].text(0.5, 1.02, 'Resolution in $\u03b7$ [{}]'.format(unit), 
+                 ha='center', va='bottom', fontsize=fs, transform=axes[1].transAxes)
+    
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+    if return_axes:
+        return fig, axes, cax
+    else:
+        return fig
+
+def resLplot(model, apex=None, savekw=None, return_axes = False,
+             mapDict=None, background=None, JBoundary=None, includeData= None,
+             unit='km', figsize=(12,16), fs=20):
+    """ produce a plot of PSFs.
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+        mapDict: dict, optional
+            Arguments for plotting map
+        background: dict, optional
+            Arguments for adding background when using mask
+        JBoundary: dict, optional
+            Arguments for showing the extent of grid_J
+        includeData, dict, optional
+            Arguments for illustration of data from inversion
+        unit: string, optional
+            Unit of spatial resolution shown on colorbar.
+        figsize: tuple, optional
+            Size of figure.
+        fs: int, optional
+            Fontsize of text in plot.
+
+    """
+
+    # Set up figures
+    fig = plt.figure(figsize = figsize)
+    ax  = plt.subplot2grid((32, 1), (0, 0), rowspan=30)
+    cax = plt.subplot2grid((32, 10), (31, 1), colspan = 8)
+    
+    format_ax(ax, model, apex = apex, colors='gray')
+    
+    # Colar scale
+    vmin = np.min(model.resL[(model.xiResFlag + model.etaResFlag) == 2])
+    vmax = np.max(model.resL[(model.xiResFlag + model.etaResFlag) == 2])
+    
+    # Default settings
+    if not isinstance(mapDict, dict):
+        mapDict     = {'vmin':vmin, 'vmax':vmax, 'cmap':'Reds', 'zorder':0}
+    
+    if not isinstance(background, dict):
+        background  = {'color':'k', 'alpha':0.8, 'zorder':-1}
+    
+    if not isinstance(JBoundary, dict):
+        JBoundary   = {'linewidth':0.8, 'color':'tab:blue'}
+
+    if not isinstance(includeData, dict):
+        includeData = {'dtypes':['ground_mag', 'space_mag_fac', 'convection'],
+                       'colors':['k', 'tab:green', 'tab:blue'],
+                       'marker':'*', 'linestyle':'', 'alpha':0.8, 'zorder':1}
+    
+    var = np.ma.array(model.resL, mask=(model.xiResFlag + model.etaResFlag) < 2)
+    _, cc = mapPlot(ax, var, model.grid_E, model, mapDict=mapDict, 
+                includeData=includeData, JBoundary=JBoundary, background=background)
+    
+    # Add colorbar
+    cbar = fig.colorbar(cc, cax=cax, orientation="horizontal")
+    cax.set_xticklabels(cax.get_xticklabels(), fontsize=fs)
+    cax.set_xlabel(unit, fontsize=fs)
+    
+    # Legend
+    lgnd = ax.legend(loc=8, bbox_to_anchor=(0.5, -0.25), fontsize=fs, ncols=2)
+    for lgndhandle in lgnd.legendHandles:
+        lgndhandle._markersize = fs
+    
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+        
+    if return_axes:
+        return fig, ax
+    else:
+        return fig
+
+def PSFplot(model, i, apex=None, savekw=None, return_axes = False,
+            mapDict=None, background=None, JBoundary=None, includeData= None,
+            figsize=(12,12), fs=20):
+    """ produce a plot of PSFs.
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+        mapDict: dict, optional
+            Arguments for plotting map
+        background: dict, optional
+            Arguments for adding background when using mask
+        JBoundary: dict, optional
+            Arguments for showing the extent of grid_J
+        includeData, dict, optional
+            Arguments for illustration of data from inversion
+        unit: string, optional
+            Unit of spatial resolution shown on colorbar.
+        figsize: tuple, optional
+            Size of figure.
+        fs: int, optional
+            Fontsize of text in plot.
+
+    """
+
+    # Set up figures
+    fig = plt.figure(figsize = figsize)
+    ax = plt.gca()
+    format_ax(ax, model, apex = apex, colors='gray')
+    
+    format_ax(ax, model, apex = apex, colors='gray')
+    
+    PSF = model.Rmatrix[:, i].reshape(model.grid_E.shape)
+    
+    # Colar scale
+    vmax = np.max(PSF)
+    
+    # Default settings
+    if not isinstance(mapDict, dict):
+        mapDict     = {'vmin':-vmax, 'vmax':vmax, 'cmap':'bwr', 'zorder':0}
+    
+    if not isinstance(background, dict):
+        background  = {'color':'k', 'alpha':0.8, 'zorder':-1}
+    
+    if not isinstance(JBoundary, dict):
+        JBoundary   = {'linewidth':0.8, 'color':'tab:blue'}
+
+    if not isinstance(includeData, dict):
+        includeData = {'dtypes':['ground_mag', 'space_mag_fac', 'convection'],
+                       'colors':['k', 'tab:green', 'tab:blue'],
+                       'marker':'*', 'linestyle':'', 'alpha':0.8, 'zorder':1}
+    
+    _, cc = mapPlot(ax, PSF, model.grid_E, model, mapDict=mapDict, 
+                includeData=includeData, JBoundary=JBoundary, background=background)
+    
+    # Plot id and max
+    row = i//model.grid_E.shape[1]
+    col = i%model.grid_E.shape[1]
+    ax.plot(model.grid_E.xi[row, col], model.grid_E.eta[row, col], 
+            '.', color='k', markersize=17, label='Impulse')
+    
+    ii = np.argmax(abs(PSF))
+    rowPSF = ii//model.grid_E.shape[1]
+    colPSF = ii%model.grid_E.shape[1]
+    ax.plot(model.grid_E.xi[rowPSF, colPSF], model.grid_E.eta[rowPSF, colPSF], 
+            '.', color='tab:green', markersize=14, label='max |PSF|')
+        
+    # Legend
+    lgnd = ax.legend(loc=8, bbox_to_anchor=(0.5, -0.2), fontsize=fs, ncols=2)
+    for lgndhandle in lgnd.legendHandles:
+        lgndhandle._markersize = fs
+    
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+        
+    if return_axes:
+        return fig, ax
+    else:
+        return fig
+
+def Cmplot(model, apex=None, savekw = None, return_axes = False,
+                   mapDict=None, background=None, JBoundary=None, includeData= None,
+                   unit='mV/m', figsize=(12,16), fs=20):
+    """ produce a plot of spatial resolution. 
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+        mapDict: dict, optional
+            Arguments for plotting map
+        background: dict, optional
+            Arguments for adding background when using mask
+        JBoundary: dict, optional
+            Arguments for showing the extent of grid_J
+        includeData, dict, optional
+            Arguments for illustration of data from inversion
+        unit: string, optional
+            Unit of spatial resolution shown on colorbar.
+        figsize: tuple, optional
+            Size of figure.
+        fs: int, optional
+            Fontsize of text in plot.
+
+    """
+
+    # Set up figures        
+    fig = plt.figure(figsize = figsize)
+    ax  = plt.subplot2grid((32, 1), (0, 0), rowspan=30)
+    cax = plt.subplot2grid((32, 10), (31, 1), colspan = 8)
+    
+    format_ax(ax, model, apex = apex, colors='gray')
+        
+    var = np.sqrt(np.diag(model.Cmpost).reshape(model.grid_E.shape))*1e3
+    
+    # Colar scale
+    vmin = np.min(var)
+    vmax = np.max(var)
+    
+    # Default settings
+    if not isinstance(mapDict, dict):
+        mapDict     = {'vmin':vmin, 'vmax':vmax, 'cmap':'Reds', 'zorder':0}
+    
+    if not isinstance(background, dict):
+        background  = {'color':'k', 'alpha':0.8, 'zorder':-1}
+    
+    if not isinstance(JBoundary, dict):
+        JBoundary   = {'linewidth':0.8, 'color':'k'}
+
+    if not isinstance(includeData, dict):
+        includeData = {'dtypes':['ground_mag', 'space_mag_fac', 'convection'],
+                       'colors':['tab:blue', 'k', 'tab:green'],
+                       'marker':'*', 'linestyle':'', 'alpha':0.8, 'zorder':1}
+    
+    # Plot spatial resolution
+    _, cc = mapPlot(ax, var, model.grid_E, model, mapDict=mapDict, 
+                includeData=includeData, JBoundary=JBoundary, background=background)
+        
+    # Add colorbar
+    cbar = fig.colorbar(cc, cax=cax, orientation="horizontal")
+    cax.set_xticklabels(cax.get_xticklabels(), fontsize=fs)
+    cax.set_xlabel(unit, fontsize=fs)
+    
+    # legend
+    lgnd = ax.legend(loc=8, bbox_to_anchor=(0.5, -0.25), fontsize=fs, ncols=2)
+    for lgndhandle in lgnd.legendHandles:
+        lgndhandle._markersize = fs
+            
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+        
+    if return_axes:
+        return fig, ax
+    else:
+        return fig
+
+def Cdplot(model, dtype, apex=None, savekw = None, return_axes = False,
+           mapDict=None, background=None, JBoundary=None, includeData= None,
+           unit=None, figsize=(12,16), fs=20):
+    
+    """ produce a plot of spatial resolution. 
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+        mapDict: dict, optional
+            Arguments for plotting map
+        background: dict, optional
+            Arguments for adding background when using mask
+        JBoundary: dict, optional
+            Arguments for showing the extent of grid_J
+        includeData, dict, optional
+            Arguments for illustration of data from inversion
+        unit: string, optional
+            Unit of spatial resolution shown on colorbar.
+        figsize: tuple, optional
+            Size of figure.
+        fs: int, optional
+            Fontsize of text in plot.
+
+    """
+    
+    if 'mag' in dtype:
+        grid = model.grid_E
+        if dtype == 'ground_mag':
+            coords = {'lon':grid.lon.flatten(), 'lat':grid.lat.flatten(), 'r':np.ones(grid.size)*6371.2e3}
+        else:
+            coords = {'lon':grid.lon.flatten(), 'lat':grid.lat.flatten(), 'r':np.ones(grid.size)*model.R}
+        Gs = np.split(model.matrix_func[dtype](**coords), 3, axis = 0)
+        scale = 1e9
+        unit = 'nT'
+        components = ['B$_{e}$', 'B$_{n}$', 'B$_{r}$']
+    elif dtype in ['efield', 'convection']:
+        grid = model.grid_J
+        coords = {'lon':grid.lon.flatten(), 'lat':grid.lat.flatten()}
+        Gs = model.matrix_func[dtype](**coords)
+        if dtype == 'efield':
+            scale = 1e3
+            unit = 'mV/m'
+            components = ['E$_{e}$', 'E$_{n}$']
+        else:
+            scale = 1e0
+            unit = 'm/s'
+            components = ['v$_{e}$', 'v$_{n}$']
+    elif dtype == 'fac':
+        grid = model.grid_J
+        coords = {'lon':grid.lon.flatten(), 'lat':grid.lat.flatten()}
+        Gs = [np.vstack(model.matrix_func[dtype](**coords))]
+        scale = 1e0
+        unit = 'A/m$^2$'
+        components = ['']
+    else:
+        print('No match for dtype!')
+        return
+    
+    # Start figure
+    if  len(Gs) == 1:
+        fig  = plt.figure(figsize = figsize)
+        axes = [plt.subplot2grid((32, 1), (0, 0), rowspan=30)]
+    elif len(Gs) == 2:        
+        figsize = (2*figsize[0], figsize[1])
+        fig  = plt.figure(figsize = figsize)
+        axes = [plt.subplot2grid((32, 2), (0, 0), rowspan=30),
+                plt.subplot2grid((32, 2), (0, 1), rowspan=30)]
+    elif len(Gs) == 3:
+        figsize = (3*figsize[0], figsize[1])
+        fig  = plt.figure(figsize = figsize)
+        axes = [plt.subplot2grid((32, 3), (0, 0), rowspan=30),
+                plt.subplot2grid((32, 3), (0, 1), rowspan=30),
+                plt.subplot2grid((32, 3), (0, 2), rowspan=30)]
+    cax  = plt.subplot2grid((32, 10), (31, 2), colspan = 6)
+    
+    # Format axes
+    for ax in axes:
+        format_ax(ax, model, apex = apex, colors='gray')
+    
+    # Loop over all G matrices
+    for ax, G, comp in zip(axes, Gs, components):
+    
+        # Project the posterior model covariance into data space
+        Cdpost = np.sqrt(np.diag(G.dot(model.Cmpost).dot(G.T))).reshape(grid.shape)
+        
+        # Default plot settings
+        vmin = np.min(Cdpost)
+        vmax = np.max(Cdpost)
+        if not isinstance(mapDict, dict):
+            mapDict     = {'vmin':vmin, 'vmax':vmax, 'cmap':'Reds', 'zorder':0}
+    
+        if not isinstance(background, dict):
+            background  = {'color':'k', 'alpha':0.8, 'zorder':-1}
+    
+        if not isinstance(JBoundary, dict):
+            JBoundary   = {'linewidth':0.8, 'color':'k'}
+
+        if not isinstance(includeData, dict):
+            includeData = {'dtypes':['ground_mag', 'space_mag_fac', 'convection'],
+                           'colors':['tab:blue', 'k', 'tab:green'],
+                           'marker':'*', 'linestyle':'', 'alpha':0.8, 'zorder':1}
+    
+        # Plot map
+        _, cc = mapPlot(ax, Cdpost, grid, model, mapDict=mapDict, 
+                    includeData=includeData, JBoundary=JBoundary, background=background)    
+    
+        # Add title
+        if not dtype == 'fac':
+            ax.text(0.5, 1.02, comp, ha='center', va='bottom', fontsize=fs, transform=ax.transAxes)
+    
+    # Add colorbar
+    cbar = fig.colorbar(cc, cax=cax, orientation="horizontal")
+    cax.set_xticklabels(cax.get_xticklabels(), fontsize=fs)
+    cax.set_xlabel(unit, fontsize=fs)
+            
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+        
+    if return_axes:
+        return fig, ax
+    else:
+        return fig
+    
 
 def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
     """
