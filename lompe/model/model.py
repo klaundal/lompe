@@ -290,8 +290,12 @@ class Emodel(object):
                 error = np.tile(ds.error, dimensions)
 
                 self._G = np.vstack((self._G, G ))
-                self._d = np.hstack((self._d, np.hstack(ds.values) ))
-                self._w = np.hstack((self._w, spatial_weight**2/(ds.scale + error)**2 ))
+                #self._d = np.hstack((self._d, np.hstack(ds.values) ))
+                #self._w = np.hstack((self._w, spatial_weight**2/(ds.scale + error)**2 ))
+                self._d = np.hstack((self._d, np.hstack(ds.values)/ds.scale ))
+                #self._w = np.hstack((self._w, spatial_weight**2/(ds.scale/error)**2 ))
+                #self._w = np.hstack((self._w, spatial_weight / (ds.scale/error)**2 ))
+                self._w = np.hstack((self._w, spatial_weight * (ds.scale/error)**2 ))
 
         w = self._w.reshape((-1, 1)) # column vector
         self.GTG = (self._G * w).T.dot(self._G)

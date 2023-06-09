@@ -251,9 +251,33 @@ def plot_quiver(ax, model, dtype, scale = None, **kwargs):
     lo, la = model.grid_J.projection.cube2geo(xi, eta)
     A = func(lon = lo, lat = la)
     if len(A) == 2:
-        Ae, An = A
+        Ae, An = A        
     if len(A) == 3:
-        Ae, An, Au = A 
+        Ae, An, Au = A
+    
+    '''
+    scale = 1
+    if dtype == 'space_mag_fac':
+        scale = 2e9
+    elif dtype == 'electric_current':
+        scale = 3e2
+    elif dtype == 'ground_mag':
+        scale = 5e9
+                
+    if len(A) == 3:
+        Au *= scale
+    Ae *= scale
+    An *= scale
+        
+        
+    if dtype != 'electric_current':
+        if len(model.data[dtype]) != 0:
+            if len(A) == 3:
+                Au *= model.data[dtype][0].scale
+            Ae *= model.data[dtype][0].scale
+            An *= model.data[dtype][0].scale
+    '''
+    
     x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(Ae, An, lo, la)
     
     return ax.quiver(x, y, Ax, Ay, **kwargs)
@@ -306,6 +330,13 @@ def plot_contour(ax, model, dtype, vertical = False, **kwargs):
     if 'extend' not in kwargs.keys():
         kwargs['extend'] = 'both'
 
+    '''
+    if dtype == 'ground_mag':
+        z *= 3e2
+    if dtype == 'fac':
+        z *= 5e2
+    '''
+        
     if z.size == model.grid_J.xi.size:
         xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
     else:
@@ -415,6 +446,10 @@ def plot_potential(ax, model, **kwargs):
 
     V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
     V = V - V.min() - (V.max() - V.min())/2
+
+    '''
+    V *= 3e2
+    '''
 
     if 'levels' not in kwargs.keys():
         dV = 5 # contour level step size in kV
@@ -1116,7 +1151,7 @@ def Cmplot(model, apex=None, savekw = None, return_axes = False,
 
 def Cdplot(model, dtype, apex=None, savekw = None, return_axes = False,
            mapDict=None, background=None, JBoundary=None, includeData= None,
-           unit=None, figsize=(12,16), fs=20):
+           unit=None, figsize=(12,16), fs=20, manScale=1):
     
     """ produce a plot of spatial resolution. 
 
@@ -1209,6 +1244,8 @@ def Cdplot(model, dtype, apex=None, savekw = None, return_axes = False,
     
         # Project the posterior model covariance into data space
         Cdpost = np.sqrt(np.diag(G.dot(model.Cmpost).dot(G.T))).reshape(grid.shape)
+        Cdpost *= manScale
+        Cdpost *= scale
         
         # Default plot settings
         vmin = np.min(Cdpost)
