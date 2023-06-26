@@ -140,7 +140,7 @@ class Data(object):
         self.values = values
         if coordinates is not None:
             if datatype.lower() == 'fac':
-                warnigns.warn('Warning: FAC data must be defined on the whole Emodel.grid_J, but this is not checked.', UserWarning)
+                warnings.warn('Warning: FAC data must be defined on the whole Emodel.grid_J, but this is not checked.', UserWarning)
             if coordinates.shape[0] == 2:
                 self.coords = {'lon':coordinates[0], 'lat':coordinates[1]}
             if coordinates.shape[0] == 3:

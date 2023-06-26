@@ -8,6 +8,7 @@ from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
 from dipole import Dipole
 from .varcheck import check_input, extrapolation_check
+import scipy
 
 RE = 6371.2e3 # Earth radius in meters
 
@@ -255,12 +256,25 @@ class Emodel(object):
                                  self.grid_J.L + 2 * perimeter_width * self.grid_J.Lres, self.grid_J.W + 2 * perimeter_width * self.grid_J.Wres,
                                  self.grid_J.Lres, self.grid_J.Wres,
                                  R = self.R )
+        
+        GTGs = []
+        GTds = []
 
+        scales = []
+        for dtype in self.data.keys(): # loop through data types
+            for ds in self.data[dtype]: # loop through the datasets within each data type
+                scales.append(ds.scale)
+        
+        if np.max(scales) != 1:
+            print('The provided scales were re-scaled so max(scales)=1')
+            scales = np.array(scales)/np.max(scales)
+        
+        ii = 0
         for dtype in self.data.keys(): # loop through data types
             for ds in self.data[dtype]: # loop through the datasets within each data type
                 # skip data points that are outside biggrid:
                 ds = ds.subset(self.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
-
+                
                 if 'mag' in dtype:
                     Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
                     G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
@@ -285,24 +299,26 @@ class Emodel(object):
                 else:
                     spatial_weight = np.ones(ds.values.size)
 
-
                 dimensions = np.array(ds.values, ndmin = 2).shape[0]
                 error = np.tile(ds.error, dimensions)
+                
+                w_i = spatial_weight * 1/(error**2) * scales[ii]
+                                
+                GTG_i = G.T.dot(np.diag(w_i)).dot(G)
+                GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
+                
+                GTGs.append(GTG_i)
+                GTds.append(GTd_i)
+                
+                if scales[ii] != 1:
+                   print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(scales[ii])))
+                ii += 1                
 
-                self._G = np.vstack((self._G, G ))
-                #self._d = np.hstack((self._d, np.hstack(ds.values) ))
-                #self._w = np.hstack((self._w, spatial_weight**2/(ds.scale + error)**2 ))
-                self._d = np.hstack((self._d, np.hstack(ds.values)/ds.scale ))
-                #self._w = np.hstack((self._w, spatial_weight**2/(ds.scale/error)**2 ))
-                #self._w = np.hstack((self._w, spatial_weight / (ds.scale/error)**2 ))
-                self._w = np.hstack((self._w, spatial_weight * (ds.scale/error)**2 ))
-
-        w = self._w.reshape((-1, 1)) # column vector
-        self.GTG = (self._G * w).T.dot(self._G)
-        GTd = (self._G * w).T.dot(self._d)
+        self.GTG = np.sum(np.array(GTGs), axis=0)
+        self.GTd = np.sum(np.array(GTds), axis=0)
 
         # regularization
-        if l1 > 0 or l2 > 0:
+        if (l1 > 0 or l2 > 0):
             gtg_mag = np.median(np.diagonal(self.GTG))
             ltl_mag = np.median(self.LTL.diagonal())
             GG = self.GTG + l1*gtg_mag * np.eye(self.GTG.shape[0]) + l2 * gtg_mag / ltl_mag * self.LTL
@@ -311,11 +327,12 @@ class Emodel(object):
 
         if 'rcond' not in kwargs.keys():
             kwargs['rcond'] = None
-        self.Cmpost = np.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
+        #self.Cmpost = np.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
+        self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]))[0]
         self.Rmatrix = self.Cmpost.dot(self.GTG)
-        self.m = self.Cmpost.dot(GTd)
+        self.m = self.Cmpost.dot(self.GTd)
 
-        return (self.GTG, GTd)
+        return (self.GTG, self.GTd)
 
     def calc_resolution(self, innerGrid=True):
         

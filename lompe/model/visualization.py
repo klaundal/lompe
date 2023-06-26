@@ -852,11 +852,11 @@ def resolutionplot(model, apex=None, savekw = None, return_axes = False,
                        'colors':['k', 'tab:green', 'tab:blue'],
                        'marker':'*', 'linestyle':'', 'alpha':0.8, 'zorder':1}
     
-    var = np.ma.array(model.xiRes, mask=model.xiResFlag < 1)
+    var = np.ma.array(model.xiRes, mask=(model.xiResFlag+model.etaResFlag) < 2)
     _, cc = mapPlot(axes[0], var, model.grid_E, model, mapDict=mapDict, 
                 includeData=includeData, JBoundary=JBoundary, background=background)
     
-    var = np.ma.array(model.etaRes, mask=model.etaResFlag < 1)
+    var = np.ma.array(model.etaRes, mask=(model.xiResFlag+model.etaResFlag) < 2)
     _, cc = mapPlot(axes[1], var, model.grid_E, model, mapDict=mapDict, 
                 includeData=includeData, JBoundary=JBoundary, background=background)
     
