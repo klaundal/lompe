@@ -15,7 +15,7 @@ class ArgumentError(Exception):
 
 
 class Data(object):
-    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, scale = None, error = 0):
+    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, scale = None, iweight = None, error = 0):
         """ 
         Initialize Data object that can be passed to the Emodel.add_data function. 
 
@@ -115,7 +115,14 @@ class Data(object):
             set to a typical scale for the data, in SI units. For example, convection could be
             typically 100 [m/s], and magnetic field 100e-9 [T]. If not set, a default value is
             used for each dataset.
-        error: array of same length as values, or int, optional
+        iweight: float, optional
+            importance weight of the data ranging from 0 to 1. For example, since ground 
+            magnetometer measurements can only indirectly influence the calculation of 
+            ionospheric convection via conductance, one might set iweight=0.3 for ground 
+            magnetometer data and iweight=1.0 for ionospheric convection measurements. Keep in 
+            mind that this weight is directly applied to the a priori inverse data covariance matrix, 
+            so the data error is effectively increased by a factor of 1/sqrt(iweight).
+        error: array of same length as values, or float, optional
             Measurement error. Used to calculate the data covariance matrix. Use SI units.
 
         """
@@ -127,13 +134,19 @@ class Data(object):
             raise ArgumentError(f'datatype not recognized: {datatype}')
             return(None)
 
-        scales = {'ground_mag':100e-9, 'space_mag_full':200e-9, 'space_mag_fac':200e-9, 'convection':100, 'efield':10e-3, 'fac':1e-6}
+        errors = {'ground_mag':10e-9, 'space_mag_full':30e-9, 'space_mag_fac':30e-9, 'convection':50, 'efield':3e-3, 'fac':1E-6}
+        iweights = {'ground_mag':0.4, 'space_mag_full':1.0, 'space_mag_fac':1.0, 'convection':1.0, 'efield':1.0, 'fac':1.0}
 
-        if scale is None:
-            self.scale = scales[datatype.lower()]
-        else:
-            self.scale = scale
+        assert scale is None,"'scale' keyword is deprecated! Please use 'iweight' (\"importance weight\") instead"
 
+        if error == 0:
+            error = errors[datatype]
+            warnings.warn(f"'error' keyword not set for datatype \"{datatype}\"! Using error={error}", UserWarning)
+        
+        if iweight is None:
+            iweight = iweights[datatype]
+            warnings.warn(f"'iweight' keyword not set for datatype \"{datatype}\"! Using iweight={iweight}", UserWarning)
+        
         self.label = datatype if label is None else label
         
         self.datatype = datatype
@@ -172,6 +185,9 @@ class Data(object):
             self.error = np.full(self.N, error)
         else:
             self.error = error
+
+        # assign importance weight
+        self.iweight = iweight
 
         # check that number of data points and coordinates match:
         if self.coords['lat'].size != np.array(self.values, ndmin = 2).shape[1]:

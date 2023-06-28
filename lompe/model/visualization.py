@@ -789,7 +789,10 @@ def mapPlot(ax, var, grid, model, mapDict=None, includeData=None, JBoundary=None
 def resolutionplot(model, apex=None, savekw = None, return_axes = False,
                    mapDict=None, background=None, JBoundary=None, includeData= None,
                    unit='km', figsize=(20,14), fs=20):
-    """ produce a plot of spatial resolution. 
+    """ Produce a plot of spatial resolution.
+
+        NOTE: The spatial resolution is not enough by itself to determine the reliability of the model in a particular area.
+        One should also use locerrorplot to assess whether localization error of the model parameter is also an issue.
 
         The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
 
@@ -885,10 +888,16 @@ def resolutionplot(model, apex=None, savekw = None, return_axes = False,
     else:
         return fig
 
-def resLplot(model, apex=None, savekw=None, return_axes = False,
+def locerrorplot(model, apex=None, savekw=None, return_axes = False,
              mapDict=None, background=None, JBoundary=None, includeData= None,
              unit='km', figsize=(12,16), fs=20):
-    """ produce a plot of PSFs.
+    """ Produce a plot of localization error. 
+    
+        Even if the output of resolutionplot looks good, one must be aware that where large values 
+        appear in this plot, they indicate where the model output should not be trusted. The 
+        values indicate the distance between the location of the model parameter and the center of 
+        its PSF. See Equation (11) in Oldenborger et al (2009, doi: 10.1111/j.1365-246X.2008.04003.x),
+        where this metric is referred to as the "localization error".
 
         The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
 
@@ -1064,8 +1073,8 @@ def PSFplot(model, i, apex=None, savekw=None, return_axes = False,
 
 def Cmplot(model, apex=None, savekw = None, return_axes = False,
                    mapDict=None, background=None, JBoundary=None, includeData= None,
-                   unit='mV/m', figsize=(12,16), fs=20):
-    """ produce a plot of spatial resolution. 
+                   unit='kV', figsize=(12,16), fs=20):
+    """ Produce a plot of the diagonals of the posterior model covariance (i.e., model parameter "uncertainty"). 
 
         The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
 
@@ -1089,7 +1098,7 @@ def Cmplot(model, apex=None, savekw = None, return_axes = False,
         includeData, dict, optional
             Arguments for illustration of data from inversion
         unit: string, optional
-            Unit of spatial resolution shown on colorbar.
+            Unit of spatial resolution shown on colorbar (default kilovolts).
         figsize: tuple, optional
             Size of figure.
         fs: int, optional
@@ -1153,7 +1162,7 @@ def Cdplot(model, dtype, apex=None, savekw = None, return_axes = False,
            mapDict=None, background=None, JBoundary=None, includeData= None,
            unit=None, figsize=(12,16), fs=20, manScale=1):
     
-    """ produce a plot of spatial resolution. 
+    """ Produce a plot of the diagonal of the posterior model covariance projected onto the data (i.e., "posterior data uncertainty").
 
         The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
 

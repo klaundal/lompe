@@ -260,14 +260,14 @@ class Emodel(object):
         GTGs = []
         GTds = []
 
-        scales = []
+        iweights = []
         for dtype in self.data.keys(): # loop through data types
             for ds in self.data[dtype]: # loop through the datasets within each data type
-                scales.append(ds.scale)
+                iweights.append(ds.iweight)
         
-        if np.max(scales) != 1:
-            print('The provided scales were re-scaled so max(scales)=1')
-            scales = np.array(scales)/np.max(scales)
+        if np.max(iweights) != 1:
+            print('The provided iweights were re-scaled so max(iweights)=1')
+            iweights = np.array(iweights)/np.max(iweights)
         
         ii = 0
         for dtype in self.data.keys(): # loop through data types
@@ -302,17 +302,16 @@ class Emodel(object):
                 dimensions = np.array(ds.values, ndmin = 2).shape[0]
                 error = np.tile(ds.error, dimensions)
                 
-                w_i = spatial_weight * 1/(error**2) * scales[ii]
+                w_i = spatial_weight * 1/(error**2) * iweights[ii]
+                if iweights[ii] != 1:
+                   print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
                                 
                 GTG_i = G.T.dot(np.diag(w_i)).dot(G)
                 GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
                 
                 GTGs.append(GTG_i)
                 GTds.append(GTd_i)
-                
-                if scales[ii] != 1:
-                   print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(scales[ii])))
-                ii += 1                
+                ii += 1         
 
         self.GTG = np.sum(np.array(GTGs), axis=0)
         self.GTd = np.sum(np.array(GTds), axis=0)
@@ -337,7 +336,7 @@ class Emodel(object):
     def calc_resolution(self, innerGrid=True):
         
         '''
-        Calculate spatial resolution following [Madelaire et al. 2023].
+        Calculate spatial resolution following Madelaire et al. [2023]
         '''
         
         # Get res in km
