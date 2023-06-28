@@ -141,11 +141,11 @@ class Data(object):
 
         if error == 0:
             error = errors[datatype]
-            warnings.warn(f"'error' keyword not set for datatype \"{datatype}\"! Using error={error}", UserWarning)
+            warnings.warn(f"'error' keyword not set for datatype '{datatype}'! Using error={error}", UserWarning)
         
         if iweight is None:
             iweight = iweights[datatype]
-            warnings.warn(f"'iweight' keyword not set for datatype \"{datatype}\"! Using iweight={iweight}", UserWarning)
+            warnings.warn(f"'iweight' keyword not set for datatype '{datatype}'! Using iweight={iweight}", UserWarning)
         
         self.label = datatype if label is None else label
         

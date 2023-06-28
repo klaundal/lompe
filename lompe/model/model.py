@@ -244,12 +244,16 @@ class Emodel(object):
             when choosing the data to be included in the inversion. Default is 10,
             which means that a 10 cell wide perimeter around the model inner
             grid will be included. 
+
+        **kwargs : dict
+            key arguments to be passed to the scipy.linalg.lstsq (e.g., 'cond', 'lapack_driver').
+            
         """
 
         # initialize G matrices
-        self._G = np.empty((0, self.grid_E.size))
-        self._d = np.empty( 0)
-        self._w = np.empty( 0)
+        #self._G = np.empty((0, self.grid_E.size))
+        #self._d = np.empty( 0)
+        #self._w = np.empty( 0)
 
         # make expanded grid for calculation of data density:
         self.biggrid = cs.CSgrid(self.grid_J.projection,
@@ -306,6 +310,10 @@ class Emodel(object):
                 if iweights[ii] != 1:
                    print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
                                 
+                #self._G = np.vstack((self._G, G))
+                #self._d = np.hstack((self._d, np.hstack(ds.values)))
+                #self._w = np.hstack((self._w, w_i))
+
                 GTG_i = G.T.dot(np.diag(w_i)).dot(G)
                 GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
                 
@@ -323,11 +331,17 @@ class Emodel(object):
             GG = self.GTG + l1*gtg_mag * np.eye(self.GTG.shape[0]) + l2 * gtg_mag / ltl_mag * self.LTL
         else:
             GG = self.GTG
+        
+        if 'rcond' in kwargs.keys():
+            warnings.warn("'rcond' keyword (and use of np.linalg.lstsq) is deprecated! Use kw 'cond' (for scipy.linalg.lstsq) instead")
+            kwargs['cond'] = kwargs['rcond']
+        if 'cond' not in kwargs.keys():
+            kwargs['cond'] = None
+        
+        if 'lapack_driver' not in kwargs.keys():
+            kwargs['lapack_driver'] = 'gelsd'
 
-        if 'rcond' not in kwargs.keys():
-            kwargs['rcond'] = None
-        #self.Cmpost = np.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
-        self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]))[0]
+        self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
         self.Rmatrix = self.Cmpost.dot(self.GTG)
         self.m = self.Cmpost.dot(self.GTd)
 
