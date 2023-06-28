@@ -35,20 +35,20 @@ def prepare_data(t0, t1):
     amp = ampere[(ampere.time >= t0) & (ampere.time <= t1)]
     B = np.vstack((amp.B_e.values, amp.B_n.values, amp.B_r.values))
     coords = np.vstack((amp.lon.values, amp.lat.values, amp.r.values))
-    amp_data = lompe.Data(B * 1e-9, coords, datatype = 'space_mag_fac', scale = 200e-9)
+    amp_data = lompe.Data(B * 1e-9, coords, datatype = 'space_mag_fac', error = 30e-9, iweight=1.0)
 
     # prepare supermag
     sm = supermag[t0:t1]
     B = np.vstack((sm.Be.values, sm.Bn.values, sm.Bu.values))
     coords = np.vstack((sm.lon.values, sm.lat.values))
-    sm_data = lompe.Data(B * 1e-9, coords, datatype = 'ground_mag', scale = 100e-9)
+    sm_data = lompe.Data(B * 1e-9, coords, datatype = 'ground_mag', error = 10e-9, iweight=0.4)
 
     # prepare superdarn
     sd = superdarn.loc[(superdarn.index >= t0) & (superdarn.index <= t1)]
     vlos = sd['vlos'].values
     coords = np.vstack((sd['glon'].values, sd['glat'].values))
     los  = np.vstack((sd['le'].values, sd['ln'].values))
-    sd_data = lompe.Data(vlos, coordinates = coords, LOS = los, datatype = 'convection', scale = 500)
+    sd_data = lompe.Data(vlos, coordinates = coords, LOS = los, datatype = 'convection', error = 50, iweight=1.0)
     
     return amp_data, sm_data, sd_data
 

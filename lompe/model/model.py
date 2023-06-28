@@ -8,6 +8,7 @@ from ppigrf import igrf
 from lompe.utils.time import yearfrac_to_datetime
 from dipole import Dipole
 from .varcheck import check_input, extrapolation_check
+import scipy
 
 RE = 6371.2e3 # Earth radius in meters
 
@@ -243,24 +244,41 @@ class Emodel(object):
             when choosing the data to be included in the inversion. Default is 10,
             which means that a 10 cell wide perimeter around the model inner
             grid will be included. 
+
+        **kwargs : dict
+            key arguments to be passed to the scipy.linalg.lstsq (e.g., 'cond', 'lapack_driver').
+            
         """
 
         # initialize G matrices
-        self._G = np.empty((0, self.grid_E.size))
-        self._d = np.empty( 0)
-        self._w = np.empty( 0)
+        #self._G = np.empty((0, self.grid_E.size))
+        #self._d = np.empty( 0)
+        #self._w = np.empty( 0)
 
         # make expanded grid for calculation of data density:
         self.biggrid = cs.CSgrid(self.grid_J.projection,
                                  self.grid_J.L + 2 * perimeter_width * self.grid_J.Lres, self.grid_J.W + 2 * perimeter_width * self.grid_J.Wres,
                                  self.grid_J.Lres, self.grid_J.Wres,
                                  R = self.R )
+        
+        GTGs = []
+        GTds = []
 
+        iweights = []
+        for dtype in self.data.keys(): # loop through data types
+            for ds in self.data[dtype]: # loop through the datasets within each data type
+                iweights.append(ds.iweight)
+        
+        if np.max(iweights) != 1:
+            print('The provided iweights were re-scaled so max(iweights)=1')
+            iweights = np.array(iweights)/np.max(iweights)
+        
+        ii = 0
         for dtype in self.data.keys(): # loop through data types
             for ds in self.data[dtype]: # loop through the datasets within each data type
                 # skip data points that are outside biggrid:
                 ds = ds.subset(self.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
-
+                
                 if 'mag' in dtype:
                     Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
                     G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
@@ -285,32 +303,170 @@ class Emodel(object):
                 else:
                     spatial_weight = np.ones(ds.values.size)
 
-
                 dimensions = np.array(ds.values, ndmin = 2).shape[0]
                 error = np.tile(ds.error, dimensions)
+                
+                w_i = spatial_weight * 1/(error**2) * iweights[ii]
+                if iweights[ii] != 1:
+                   print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
+                                
+                #self._G = np.vstack((self._G, G))
+                #self._d = np.hstack((self._d, np.hstack(ds.values)))
+                #self._w = np.hstack((self._w, w_i))
 
-                self._G = np.vstack((self._G, G ))
-                self._d = np.hstack((self._d, np.hstack(ds.values) ))
-                self._w = np.hstack((self._w, spatial_weight**2/(ds.scale + error)**2 ))
+                GTG_i = G.T.dot(np.diag(w_i)).dot(G)
+                GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
+                
+                GTGs.append(GTG_i)
+                GTds.append(GTd_i)
+                ii += 1         
 
-        w = self._w.reshape((-1, 1)) # column vector
-        GTG = (self._G * w).T.dot(self._G)
-        GTd = (self._G * w).T.dot(self._d)
+        self.GTG = np.sum(np.array(GTGs), axis=0)
+        self.GTd = np.sum(np.array(GTds), axis=0)
 
         # regularization
-        if l1 > 0 or l2 > 0:
-            gtg_mag = np.median(np.diagonal(GTG))
+        if (l1 > 0 or l2 > 0):
+            gtg_mag = np.median(np.diagonal(self.GTG))
             ltl_mag = np.median(self.LTL.diagonal())
-            GG = GTG + l1*gtg_mag * np.eye(GTG.shape[0]) + l2 * gtg_mag / ltl_mag * self.LTL
+            GG = self.GTG + l1*gtg_mag * np.eye(self.GTG.shape[0]) + l2 * gtg_mag / ltl_mag * self.LTL
         else:
-            GG = GTG
+            GG = self.GTG
+        
+        if 'rcond' in kwargs.keys():
+            warnings.warn("'rcond' keyword (and use of np.linalg.lstsq) is deprecated! Use kw 'cond' (for scipy.linalg.lstsq) instead")
+            kwargs['cond'] = kwargs['rcond']
+        if 'cond' not in kwargs.keys():
+            kwargs['cond'] = None
+        
+        if 'lapack_driver' not in kwargs.keys():
+            kwargs['lapack_driver'] = 'gelsd'
 
-        if 'rcond' not in kwargs.keys():
-            kwargs['rcond'] = None
-        self.m = np.linalg.lstsq(GG, GTd, **kwargs)[0]
+        self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
+        self.Rmatrix = self.Cmpost.dot(self.GTG)
+        self.m = self.Cmpost.dot(self.GTd)
 
-        return(GTG, GTd)
+        return (self.GTG, self.GTd)
 
+    def calc_resolution(self, innerGrid=True):
+        
+        '''
+        Calculate spatial resolution following Madelaire et al. [2023]
+        '''
+        
+        # Get res in km
+        colatxi = 90 - self.grid_E.lat
+        lonxi = self.grid_E.lon
+        d2r = np.pi/180
+
+        xxi = self.R*1e-3 * np.sin(colatxi*d2r) * np.cos(lonxi*d2r)
+        yxi = self.R*1e-3 * np.sin(colatxi*d2r) * np.sin(lonxi*d2r)
+        zxi = self.R*1e-3 * np.cos(colatxi*d2r)
+
+        euclidxi = np.median(np.sqrt(np.diff(xxi, axis=1)**2 + np.diff(yxi, axis=1)**2 + np.diff(zxi,axis=1)**2))
+        euclideta = np.median(np.sqrt(np.diff(xxi, axis=0)**2 + np.diff(yxi, axis=0)**2 + np.diff(zxi,axis=0)**2))
+        
+        # Left right function
+        def left_right(PSF_i, fraq=0.5):
+        
+            i_max = np.argmax(PSF_i)    
+            PSF_max = PSF_i[i_max]
+            
+            j = 0
+            i_left = 0
+            left_edge = True
+            while (i_max - j) >= 0:
+                if PSF_i[i_max - j] < fraq*PSF_max:
+                
+                    dPSF = PSF_i[i_max - j + 1] - PSF_i[i_max - j]
+                    dx = (fraq*PSF_max - PSF_i[i_max - j]) / dPSF
+                    i_left = i_max - j + dx
+                
+                    left_edge = False
+                
+                    break
+                else:
+                    j += 1
+
+            j = 0
+            i_right = len(PSF_i) - 1
+            right_edge = True
+            while (i_max + j) < len(PSF_i):
+                if PSF_i[i_max + j] < fraq*PSF_max:
+                
+                    dPSF = PSF_i[i_max + j] - PSF_i[i_max + j - 1]
+                    dx = (fraq*PSF_max - PSF_i[i_max + j - 1]) / dPSF
+                    i_right = i_max + j - 1 + dx 
+                
+                    right_edge = False
+                
+                    break
+                else:
+                    j += 1
+        
+            flag = True
+            if left_edge and right_edge:
+                print('I think something is wrong')
+                flag = False
+            elif left_edge:
+                i_left = i_max - (i_right - i_max)
+                flag = False
+            elif right_edge:
+                i_right = i_max + (i_max - i_left)
+                flag = False
+        
+            return i_left, i_right, i_max, flag
+        
+        # Allocate space
+        xiRes = np.zeros(self.grid_E.shape)
+        etaRes = np.zeros(self.grid_E.shape)
+        xiResFlag = np.zeros(self.grid_E.shape)
+        etaResFlag = np.zeros(self.grid_E.shape)
+        resL = np.zeros(self.grid_E.shape)
+        
+        # Loop over all PSFs
+        for i in range(xiRes.size):
+                        
+            row = i//xiRes.shape[1]
+            col = i%xiRes.shape[1]
+            
+            PSF = abs(self.Rmatrix[:, i]).reshape(self.grid_E.shape)
+            
+            ii = np.argmax(PSF)
+            rowPSF = ii//self.grid_E.shape[1]
+            colPSF = ii%self.grid_E.shape[1]
+            
+            dxi = abs(colPSF - col) * euclidxi
+            deta = abs(rowPSF - row) * euclideta
+            
+            resL[row, col] = np.sqrt(dxi**2 + deta**2)
+            
+            PSF_xi = np.sum(PSF, axis=0)
+            if innerGrid:
+                PSF_xi[0] = 0.99*np.max(PSF_xi[1:-1])
+                PSF_xi[-1] = 0.99*np.max(PSF_xi[1:-1])
+            i_left, i_right, i_max, flag = left_right(PSF_xi)
+            xiRes[row, col] = euclidxi * (i_right - i_left)
+            xiResFlag[row, col] = flag
+            
+            PSF_eta = np.sum(PSF, axis=1)
+            if innerGrid:
+                PSF_eta[0] = 0.99*np.max(PSF_eta[1:-1])
+                PSF_eta[-1] = 0.99*np.max(PSF_eta[1:-1])
+            i_left, i_right, i_max, flag = left_right(PSF_eta)
+            etaRes[row, col] = euclideta * (i_right - i_left)
+            etaResFlag[row, col] = flag
+        
+        if innerGrid:
+            xiResFlag[:, [0, -1]] = 0
+            xiResFlag[[0, -1], :] = 0
+            etaResFlag[:, [0, -1]] = 0            
+            etaResFlag[[0, -1], :] = 0
+        
+        self.xiRes = xiRes
+        self.etaRes = etaRes
+        self.xiResFlag = xiResFlag
+        self.etaResFlag = etaResFlag
+        self.resL = resL
 
     def add_data(self, *datasets):
         """
