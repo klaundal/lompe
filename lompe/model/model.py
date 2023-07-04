@@ -159,7 +159,7 @@ class Emodel(object):
 
     def save(self, time=0, parameters_to_save='all', **kwargs):
         """
-        For saving the model and/or the lompe output
+        For saving the model and/or the lompe output. Calls lompe.utils.save_load_utiles.save_model
     
         Parameters
         ----------
@@ -204,8 +204,16 @@ class Emodel(object):
             The default is 0 and will be changed when append is True to 1+ the maximum of the existing file. 
             It is recommened to choose a value when working with multiple times.
         **kwargs : dict
-            key arguments to be passed to the save_model function.
-            (read save_model doc string for more information)
+            key arguments to be passed to the lompe.utils.save_load_utiles.save_model function.
+            (read lompe.utils.save_load_utiles.save_model doc string for more information)
+            
+            Some possible kwargs (copied from lompe.utils.save_load_utiles.save_model doc string)
+            file_name : str/bool, optional
+                A string containing the path and name of the xarray file if you wish to save using this function. 
+                The default is False and no save will be made.
+            append : bool, optional
+                If filename is provided the current dataset will be added on to the existing dataset if it exists. 
+                The default is True and the dataset will be added to the existing.
     
         Raises
         ------
