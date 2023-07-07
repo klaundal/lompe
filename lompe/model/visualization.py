@@ -1297,7 +1297,8 @@ def Cdplot(model, dtype, apex=None, savekw = None, return_axes = False,
         return fig
     
 
-def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
+def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}, 
+                           quiverscales=None, perimiter_width=10):
     """
     Make a scatter plot of lompe model predictions vs input data 
 
@@ -1307,11 +1308,31 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
         should contain datasets and a solution vector.
     fig_parameters: dict
         parameters passed to the plt.subplots function 
+     quiverscales: dict, optional
+         dictionary of scales to use for quiver plots. keys must be valid datatype. 
+         default values are used for datatypes that are not in list of keys        
+    perimeter_width: int, optional
+        The number of grid cells with which the grid area will be expanded
+        when choosing the data to be included in the model-data comparison. 
+        Default is 10, which means that a 10 cell wide perimeter around the 
+        model inner grid will be included. Note that this specification can only
+        act to reduce the number of datapoints compared to what is used in the
+        inversion, since the run_inversion() function erases data outside the
+        perimiter_widt specified in the call to that function. Negative values 
+        will select only data within model.biggrid with the specified number. 
+        Also note that if resreicting the data with this keyword, the model.data 
+        object will be altered, deleting the data that one excludes here.
 
     returns
     -------
     ax: matplotlib AxesSubplot object
     """
+    
+    if quiverscales == None:
+        quiverscales = QUIVERSCALES
+    else:
+        QUIVERSCALES.update(quiverscales)
+        quiverscales = QUIVERSCALES    
 
     fig, ax = plt.subplots(**fig_parameters)
 
@@ -1321,13 +1342,14 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
         for ds in model.data[dtype]: # loop through the datasets within each data type
 
             # skip data points that are outside biggrid:
-            ds = ds.subset(model.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
-
+            ds = ds.subset(model.biggrid.ingrid(ds.coords['lon'], ds.coords['lat'], ext_factor=perimiter_width))
+            scaling = QUIVERSCALES[ds.datatype]/2
+            
             if 'mag' in dtype:
                 Gs = np.split(model.matrix_func[dtype](**ds.coords), 3, axis = 0)
                 Bs = map(lambda G: G.dot(model.m), Gs)
                 for B, d, sym in zip(Bs, ds.values, ['>', '^', 'o']):
-                    ax.scatter(d/ds.scale, B/ds.scale, marker  = sym, c = 'C' + str(counter), alpha = .7)
+                    ax.scatter(d/scaling, B/scaling, marker  = sym, c = 'C' + str(counter), alpha = .7)
 
 
             if (dtype in ['convection', 'efield']):
@@ -1335,11 +1357,11 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
 
                 if ds.los is not None: # deal with line of sight data:
                     G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
-                    ax.scatter(ds.values/ds.scale, G.dot(model.m)/ds.scale, c = 'C' + str(counter), marker = 'x', zorder = 4, alpha = .7)
+                    ax.scatter(ds.values/scaling, G.dot(model.m)/scaling, c = 'C' + str(counter), marker = 'x', zorder = 4, alpha = .7)
                 if ds.los is None:
                     Es = [Ge.dot(model.m), Gn.dot(model.m)]
                     for E, d, sym in zip(Es, ds.values, ['>', '^']):
-                        ax.scatter(d/ds.scale, E/ds.scale, marker  = sym, c = 'C' + str(counter), zorder = 4, alpha = .7)
+                        ax.scatter(d/scaling, E/scaling, marker  = sym, c = 'C' + str(counter), zorder = 4, alpha = .7)
 
             counter += 1
 
@@ -1367,15 +1389,16 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}):
     counter = 0
     for dtype in model.data.keys(): # loop through data types
         for ds in model.data[dtype]: # loop through the datasets within each data type
+            scaling = QUIVERSCALES[ds.datatype]/2
 
             if 'mag' in dtype:
-                ax.text(extent * (.9 - counter * .05), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e9))) + ' nT', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
+                ax.text(extent * (.9 - counter * .05), -extent + .1 + nranges/2, str(int((scaling * nranges * 1e9))) + ' nT', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
 
             if dtype == 'convection':
-                ax.text(extent *  (.9 - counter * .05), -extent + .1 + nranges/2, str(int((ds.scale * nranges))) + ' m/s', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
+                ax.text(extent *  (.9 - counter * .05), -extent + .1 + nranges/2, str(int((scaling * nranges))) + ' m/s', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)
 
             if dtype == 'efield':
-                ax.text(extent *  (.9 - counter * .05), -extent + .1 + nranges/2, str(int((ds.scale * nranges * 1e3))) + ' V/m', c = 'C' + str(counter))
+                ax.text(extent *  (.9 - counter * .05), -extent + .1 + nranges/2, str(int((scaling * nranges * 1e3))) + ' V/m', c = 'C' + str(counter))
 
             ax.text(-extent + .1, extent -.3 - counter * .25, ds.label.replace('_',' '), color = 'C' + str(counter), va = 'top', ha = 'left', size = 14)
 
