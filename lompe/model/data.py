@@ -166,9 +166,10 @@ class Data(object):
         self.isvalid = True
         if np.ndim(self.values) == 2:
             self.N = self.values.shape[1] # number of data points
-        if np.ndim(self.values) == 1:
+        elif np.ndim(self.values) == 1:
             self.N = self.values.size
-
+        elif np.ndim(self.values)>=3:
+            raise ValueError(f'Too many dimensions within data values ndim: {np.ndim(values)} cannot exceed 2.\nData array must be of shape (number of data points, vectors)\ne.g. 3D magnetometer measurement can have shape (100, 3) where ndim=2')
 
         if (LOS is not None) & (datatype in ['convection', 'efield']):
             self.los = LOS # should be (2, N) east, north components of line of sight vectors
