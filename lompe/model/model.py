@@ -1013,7 +1013,7 @@ class Emodel(object):
 
         shape = np.broadcast(lon, lat).shape
 
-        S_cf = -self._B_cf_matrix(return_poles = True)
+        S_cf =  self._B_cf_matrix(return_poles = True)
         S_df =  self._B_df_matrix(return_poles = True)
 
         Be_cf, Bn_cf = get_SECS_J_G_matrices(lat, lon, self.lat_J, self.lon_J,
