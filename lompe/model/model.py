@@ -97,7 +97,7 @@ class Emodel(object):
         self.Bu = Bu.reshape((1, -1))
 
         if not np.allclose(np.sign(self.Bu), np.sign(self.Bu.flatten()[0])):
-            raise Exception('your covers two magnetic hemispheres. It should not')
+            raise Exception('your grid covers two magnetic hemispheres. It should not')
         self.hemisphere = -np.sign(self.Bu.flatten()[0]) # 1 for north, -1 for south
 
         # calculate gradient and divergence matrices for inner grid:

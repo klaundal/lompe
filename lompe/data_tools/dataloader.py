@@ -467,7 +467,7 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
         print('SuperDARN file has unknown format. Aborting.')
         return None
 
-    radars = pydarn.utils.superdarn_radars.SuperDARNRadars() # radar information (site coordniates)
+    radars = pydarn.SuperDARNRadars.radars # radar information (site coordniates)
 
     ddd = pd.DataFrame()
     for t in range(len(data)):
@@ -484,7 +484,7 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
             ne = tt['nvec'][c]
             stids = (np.ones(ne) * s).astype(int)
             freqs = np.ones(ne) * tt['freq'][c]
-            names = [radars.radars[s][0]] * ne
+            names = [radars[s][0]] * ne
             
             temp2 = pd.DataFrame()
             temp2.loc[:,'stid'] = stids
@@ -575,7 +575,7 @@ def read_smag(event, basepath='./', tempfile_path='./', file_name=''):
         sm = xr.load_dataset(basepath + file_name, decode_coords = False, engine = 'netcdf4')
         
         # convert time columns to datetimes:
-        times = [dt.datetime(*x) for x in zip(sm.time_yr, sm.time_mo, sm.time_dy, sm.time_hr, sm.time_mt)]
+        times = [dt.datetime(*x) for x in zip(sm.time_yr.values, sm.time_mo.values, sm.time_dy.values, sm.time_hr.values, sm.time_mt.values)]        
         times = np.array(pd.DatetimeIndex(times)).reshape((-1, 1))
         times = np.repeat(times, sm.vector.size, axis = 1).flatten()
 
@@ -660,10 +660,14 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name = ''):
     
     iridset = xr.load_dataset(fn, engine = 'netcdf4')
 
-    # parse date from title
-    datestr = ''.join([c for c in iridset.title if c.isnumeric()])
-    date = dt.datetime.strptime(datestr, '%Y%m%d').date()
-    year, month, day = date.year, date.month, date.day
+    # parse date from event string. For older AMPERE files, date was parsed from 
+    # the title, but that is no longer possible in the newer files.
+    # datestr = ''.join([c for c in iridset.title if c.isnumeric()])
+    # date = dt.datetime.strptime(datestr, '%Y%m%d').date()
+    # year, month, day = date.year, date.month, date.day
+    year = int(event[0:4])
+    month = int(event[5:7])
+    day = int(event[8:10])
 
     # get datetimes:
     t = iridset.time.values
