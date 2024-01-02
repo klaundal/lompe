@@ -141,7 +141,7 @@ class Data(object):
 
         assert scale is None,"'scale' keyword is deprecated! Please use 'iweight' (\"importance weight\") instead"
 
-        if error == 0:
+        if error.size == 1 and error[0] == 0:
             error = errors[datatype]
             warnings.warn(f"'error' keyword not set for datatype '{datatype}'! Using error={error}", UserWarning)
         
