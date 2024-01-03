@@ -141,9 +141,10 @@ class Data(object):
 
         assert scale is None,"'scale' keyword is deprecated! Please use 'iweight' (\"importance weight\") instead"
 
-        if error == 0:
-            error = errors[datatype]
-            warnings.warn(f"'error' keyword not set for datatype '{datatype}'! Using error={error}", UserWarning)
+        if np.array(error).size == 1:
+            if error == 0:
+                 error = errors[datatype]
+                 warnings.warn(f"'error' keyword not set for datatype '{datatype}'! Using error={error}", UserWarning)
         
         if iweight is None:
             iweight = iweights[datatype]
