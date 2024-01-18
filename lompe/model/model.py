@@ -312,8 +312,11 @@ class Emodel(object):
                     spatial_weight = np.ones(ds.values.size)
 
                 dimensions = np.array(ds.values, ndmin = 2).shape[0]
-                error = np.tile(ds.error, dimensions)
-                
+                if np.array(ds.error, ndmin=2).shape[0]==1:
+                    error = np.tile(ds.error, dimensions)
+                else: #error is different for different components
+                    error = ds.error.flatten()
+                                    
                 w_i = spatial_weight * 1/(error**2) * iweights[ii]
                 if iweights[ii] != 1:
                    print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))

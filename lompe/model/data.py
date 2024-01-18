@@ -124,8 +124,12 @@ class Data(object):
             magnetometer data and iweight=1.0 for ionospheric convection measurements. Keep in 
             mind that this weight is directly applied to the a priori inverse data covariance matrix, 
             so the data error is effectively increased by a factor of 1/sqrt(iweight).
-        error: array of same length as values, or float, optional
+        error: either float, or 1D array of same length as values, or 2D array
+                (shape 2,N or 3,N), optional
             Measurement error. Used to calculate the data covariance matrix. Use SI units.
+            If 2D array, it means that the error of each component (east, north, up) is
+            specified separately. If 1D array, the same value is used for each component.
+            If float, the same value is used for all observations and components.
 
         """
 
@@ -214,8 +218,11 @@ class Data(object):
         """
 
         self.values  = np.array(self.values , ndmin = 2)[:, indices].squeeze()
-        self.error = self.error[indices]
-
+        if np.array(self.error, ndmin=2).shape[0] >= 2: # errors for each component
+            self.error = self.error[:,indices]
+        else:
+            self.error = self.error[indices]
+            
         for key in self.coords.keys():
             self.coords[key] = self.coords[key][indices]
 
