@@ -495,7 +495,7 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
                 temp2.loc[:,'stime'] = stime
                 temp2.loc[:,'etime'] = etime
                 temp2.loc[:,'duration'] = duration
-                temp = temp.append(temp2)
+                temp = pd.concat([temp,temp2],ignore_index=True)
         
         temp.loc[:,'mlat'] = tt['vector.mlat']              # in degrees AACGM
         temp.loc[:,'mlon'] = tt['vector.mlon']              # in degrees AACGM
@@ -506,7 +506,7 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
         temp.loc[:,'wdt'] = tt['vector.wdt.median']         # spectral width in m/s
         temp.loc[:,'time'] = stime + duration/2
         
-        ddd = ddd.append(temp)
+        ddd = pd.concat([ddd, temp], ignore_index=True)
     
     ddd.index = ddd.time
 
