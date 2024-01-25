@@ -286,51 +286,51 @@ class Emodel(object):
             for ds in self.data[dtype]: # loop through the datasets within each data type
                 # skip data points that are outside biggrid:
                 ds = ds.subset(self.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
-                
-                if 'mag' in dtype:
-                    Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
-                    G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
-                if dtype in ['efield', 'convection']:
-                    Gs = self.matrix_func[dtype](**ds.coords)
-                    G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
-                if dtype == 'fac':
-                    G = np.vstack(self.matrix_func[dtype](**ds.coords))
+                if ds.coords['lat'].size > 1: #If there is data inside biggrid                
+                    if 'mag' in dtype:
+                        Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
+                        G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
+                    if dtype in ['efield', 'convection']:
+                        Gs = self.matrix_func[dtype](**ds.coords)
+                        G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
+                    if dtype == 'fac':
+                        G = np.vstack(self.matrix_func[dtype](**ds.coords))
 
-                if (dtype in ['convection', 'efield']) & (ds.los is not None): # deal with line of sight data:
-                    Ge, Gn = np.split(G, 2, axis = 0)
-                    G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
+                    if (dtype in ['convection', 'efield']) & (ds.los is not None): # deal with line of sight data:
+                        Ge, Gn = np.split(G, 2, axis = 0)
+                        G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
 
-                # calculate weights based on data density:
-                if data_density_weight:
-                    bincount = self.biggrid.count(ds.coords['lon'], ds.coords['lat'])
-                    i, j = self.biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
-                    spatial_weight = 1. / np.maximum(bincount[i, j], 1)
-                    spatial_weight[i == -1] = 1
-                    if ds.values.ndim == 2: # stack weights for each component in dataset.values:
-                        spatial_weight = np.tile(spatial_weight, ds.values.shape[0])
-                else:
-                    spatial_weight = np.ones(ds.values.size)
+                    # calculate weights based on data density:
+                    if data_density_weight:
+                        bincount = self.biggrid.count(ds.coords['lon'], ds.coords['lat'])
+                        i, j = self.biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
+                        spatial_weight = 1. / np.maximum(bincount[i, j], 1)
+                        spatial_weight[i == -1] = 1
+                        if ds.values.ndim == 2: # stack weights for each component in dataset.values:
+                            spatial_weight = np.tile(spatial_weight, ds.values.shape[0])
+                    else:
+                        spatial_weight = np.ones(ds.values.size)
 
-                dimensions = np.array(ds.values, ndmin = 2).shape[0]
-                if np.array(ds.error, ndmin=2).shape[0]==1:
-                    error = np.tile(ds.error, dimensions)
-                else: #error is different for different components
-                    error = ds.error.flatten()
+                    dimensions = np.array(ds.values, ndmin = 2).shape[0]
+                    if np.array(ds.error, ndmin=2).shape[0]==1:
+                        error = np.tile(ds.error, dimensions)
+                    else: #error is different for different components
+                        error = ds.error.flatten()
+                                        
+                    w_i = spatial_weight * 1/(error**2) * iweights[ii]
+                    if iweights[ii] != 1:
+                        print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
                                     
-                w_i = spatial_weight * 1/(error**2) * iweights[ii]
-                if iweights[ii] != 1:
-                   print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
-                                
-                #self._G = np.vstack((self._G, G))
-                #self._d = np.hstack((self._d, np.hstack(ds.values)))
-                #self._w = np.hstack((self._w, w_i))
+                    #self._G = np.vstack((self._G, G))
+                    #self._d = np.hstack((self._d, np.hstack(ds.values)))
+                    #self._w = np.hstack((self._w, w_i))
 
-                GTG_i = G.T.dot(np.diag(w_i)).dot(G)
-                GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
-                
-                GTGs.append(GTG_i)
-                GTds.append(GTd_i)
-                ii += 1         
+                    GTG_i = G.T.dot(np.diag(w_i)).dot(G)
+                    GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
+                    
+                    GTGs.append(GTG_i)
+                    GTds.append(GTd_i)
+                    ii += 1         
 
         self.GTG = np.sum(np.array(GTGs), axis=0)
         self.GTd = np.sum(np.array(GTds), axis=0)
