@@ -17,7 +17,8 @@ class Emodel(object):
                        Hall_Pedersen_conductance,
                        epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
                        dipole = False, # set to True to use dipole field and dipole coords
-                       perfect_conductor_radius = None
+                       perfect_conductor_radius = None,
+                       ew_regularization_limit = None
                 ):
         """
         Electric field model
@@ -54,11 +55,26 @@ class Emodel(object):
             the radius (< grid.R) of a spherical shell that is a perfect conductor, at which induced currents 
             in the ground cancel Br from space currents (Juusola et al. 2016 doi:10.1002/2016JA022961). If 
             set to None (default), ground delta B will be modeled exclusively in terms of space currents
+        ew_regularization_limit: tuple, optional
+            Specify a tuple of two latitudes between which the east-west regularization term is
+            reduced to zero towards the magnetic pole. The motivation for this is that east-west 
+            regularization is not appropriate in the polar cap, and it might be better to turn it off there
         """
         # options
         self.perfect_conductor_radius = perfect_conductor_radius
         self.dipole = dipole
         self.epoch = epoch
+
+        # function that tunes the east west regularization
+        if ew_regularization_limit is None:
+            lat_w = lambda lat: lat*0 + 1.
+        else:
+            try:
+                a, b = ew_regularization_limit
+            except:
+                raise Exception('ew_regularization_limit should have two and only two values')
+            lat_w = lambda lat: np.where(lat < a, 1, np.where(lat > b, 0, (b - lat) / (b - a)))
+
 
         # set up inner and outer grids:
         self.grid_J = grid # inner
@@ -125,13 +141,15 @@ class Emodel(object):
         # matrix L that calculates derivative in magnetic eastward direction on grid_E:
         De2, Dn2 = self.grid_E.get_Le_Ln()
         if self.dipole: # L matrix gives gradient in eastward direction
-            self.L = De2
+            self.L = De2 * lat_w(self.hemisphere * grid_E.lat.flatten()).reshape((-1, 1))
             self.LTL = self.L.T.dot(self.L)
         else: # L matrix gives gradient in QD eastward direction
             apx = apexpy.Apex(epoch, refh = refh)
+            mlat, mlon = apx.geo2apex(grid_E.lat.flatten(), grid_E.lon.flatten(), refh)
             f1, f2 = apx.basevectors_qd(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
             f1 = f1/np.linalg.norm(f1, axis = 0)
             self.L = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
+            self.L = self.L * lat_w(self.hemisphere * mlat).reshape((-1, 1))
             self.LTL = self.L.T.dot(self.L)
 
 
