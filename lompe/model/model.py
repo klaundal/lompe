@@ -141,11 +141,11 @@ class Emodel(object):
         # matrix L that calculates derivative in magnetic eastward direction on grid_E:
         De2, Dn2 = self.grid_E.get_Le_Ln()
         if self.dipole: # L matrix gives gradient in eastward direction
-            self.L = De2 * lat_w(self.hemisphere * grid_E.lat.flatten()).reshape((-1, 1))
+            self.L = De2 * lat_w(self.hemisphere * self.grid_E.lat.flatten()).reshape((-1, 1))
             self.LTL = self.L.T.dot(self.L)
         else: # L matrix gives gradient in QD eastward direction
             apx = apexpy.Apex(epoch, refh = refh)
-            mlat, mlon = apx.geo2apex(grid_E.lat.flatten(), grid_E.lon.flatten(), refh)
+            mlat, mlon = apx.geo2apex(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
             f1, f2 = apx.basevectors_qd(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
             f1 = f1/np.linalg.norm(f1, axis = 0)
             self.L = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
