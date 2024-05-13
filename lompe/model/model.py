@@ -9,6 +9,7 @@ from lompe.utils.time import yearfrac_to_datetime
 from dipole import Dipole
 from .varcheck import check_input, extrapolation_check
 import scipy
+import warnings
 
 RE = 6371.2e3 # Earth radius in meters
 
@@ -230,7 +231,7 @@ class Emodel(object):
         from lompe.utils import save_model
         return save_model(self, time=time, save=parameters_to_save, **kwargs)
         
-    def run_inversion(self, l1 = 0, l2 = 0,
+    def run_inversion(self, l1 = 0, l2 = 0, l3 = 0, FAC_reg=False,
                       data_density_weight = True, perimeter_width = 10,
                       **kwargs):
         """ Calculate model vector
@@ -240,10 +241,17 @@ class Emodel(object):
 
         Parameters
         ----------
-        l1 : float
-            Damping parameter for model norm
+        l1 : float or tuple
+            Damping parameter for model norm. If FAC_reg=True l1 can be a tuple 
+            where the first and second entry target the FAC and E norm, 
+            respectively. If it is just a float the E norm will be ignored.
         l2 : float
             Damping parameter for variation in the magnetic eastward direction
+        l3 : float
+            Damping parameter for variation in the magnetic northward direction            
+        FAC_reg : boolean
+            Activates FAC based regularization if True (default is False). Read
+            l1 description for details on mixed FAC and E 2-norm regularization.
         data_density_weight : bool, optional
             Set to True to apply weights that are inversely proportional
             to data density. 
@@ -335,11 +343,49 @@ class Emodel(object):
         self.GTG = np.sum(np.array(GTGs), axis=0)
         self.GTd = np.sum(np.array(GTds), axis=0)
 
-        # regularization
+        # Reguarlization
         if (l1 > 0 or l2 > 0):
             gtg_mag = np.median(np.diagonal(self.GTG))
-            ltl_mag = np.median(self.LTL.diagonal())
-            GG = self.GTG + l1*gtg_mag * np.eye(self.GTG.shape[0]) + l2 * gtg_mag / ltl_mag * self.LTL
+            
+            # Check for FAC regularization
+            if FAC_reg:
+                # Linear relation between FACs and model parameters
+                G_FAC = self.FAC_matrix()
+                
+                # East/west and north/south 1st derivative of FAC
+                De2, Dn2 = self.grid_J.get_Le_Ln()
+                G_FAC_e = De2.dot(G_FAC)
+                G_FAC_n = Dn2.dot(G_FAC)
+                del G_FAC
+                
+                # l1, l2, l3 FAC roughening matrices
+                LTL_l1 = G_FAC.T.dot(G_FAC)
+                LTL_l2 = G_FAC_e.T.dot(G_FAC_e)
+                LTL_l3 = G_FAC_n.T.dot(G_FAC_n)                
+
+            # Default regularization (not FAC)
+            else:
+                LTL_l1 = np.eye(self.GTG.shape[0])
+                LTL_l2 = self.LTL
+                LTL_l3 = np.zeros(LTL_l2.shape)
+
+            # Scaling factors
+            ltl_mag_l1 = np.median(LTL_l1.diagonal())
+            ltl_mag_l2 = np.median(LTL_l2.diagonal())
+            ltl_mag_l3 = np.median(LTL_l3.diagonal())
+            
+            # Regularized GTG matrix
+            if FAC_reg and isinstance(l1, tuple):
+                if len(l1) != 2:
+                    raise ValueError('l1 need to be a tuple of length 2.')
+                LTL = l1[0]/ltl_mag_l1*LTL_l1 + l1[1]/np.eye(self.GTG.shape[0])
+            else:
+                LTL = l1/ltl_mag_l1*LTL_l1 
+            LTL += l2/ltl_mag_l2*LTL_l2 + l3/ltl_mag_l3*LTL_l3
+            
+            GG = self.GTG + LTL*gtg_mag
+        
+        # No regularization
         else:
             GG = self.GTG
         
