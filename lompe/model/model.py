@@ -289,9 +289,11 @@ class Emodel(object):
             where the first and second entry target the FAC and E norm, 
             respectively. If it is just a float the E norm will be ignored.
         l2 : float
-            Damping parameter for variation in the magnetic eastward direction
+            Damping parameter for variation in the magnetic eastward direction.
+            Functionality similar to l1 in regards to FAC_reg.
         l3 : float
-            Damping parameter for variation in the magnetic northward direction            
+            Damping parameter for variation in the magnetic northward direction
+            Functionality similar to l1 in regards to FAC_reg.
         FAC_reg : boolean
             Activates FAC based regularization if True (default is False). Read
             l1 description for details on mixed FAC and E 2-norm regularization.
