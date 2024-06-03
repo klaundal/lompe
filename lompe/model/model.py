@@ -142,16 +142,41 @@ class Emodel(object):
         # matrix L that calculates derivative in magnetic eastward direction on grid_E:
         De2, Dn2 = self.grid_E.get_Le_Ln()
         if self.dipole: # L matrix gives gradient in eastward direction
-            self.L = De2 * lat_w(self.hemisphere * self.grid_E.lat.flatten()).reshape((-1, 1))
-            self.LTL = self.L.T.dot(self.L)
+            self.Le = De2 * lat_w(self.hemisphere * self.grid_E.lat.flatten()).reshape((-1, 1))
+            self.LTLe = self.Le.T.dot(self.Le)
+            self.Ln = Dn2
+            self.LTLn = self.Ln.T.dot(self.Ln)
         else: # L matrix gives gradient in QD eastward direction
             apx = apexpy.Apex(epoch, refh = refh)
             mlat, mlon = apx.geo2apex(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
             f1, f2 = apx.basevectors_qd(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
             f1 = f1/np.linalg.norm(f1, axis = 0)
-            self.L = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
-            self.L = self.L * lat_w(self.hemisphere * mlat).reshape((-1, 1))
-            self.LTL = self.L.T.dot(self.L)
+            self.Le = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
+            self.Le = self.Le * lat_w(self.hemisphere * mlat).reshape((-1, 1))
+            self.LTLe = self.Le.T.dot(self.Le)
+            f2 = f2/np.linalg.norm(f2, axis = 0)
+            self.Ln = De2 * f2[0].reshape((-1, 1)) + Dn2 * f2[1].reshape((-1, 1))
+            self.LTLn = self.Ln.T.dot(self.Ln)
+            
+        # matrix L that calculates derivative in magnetic eastward direction on grid_J:
+        # Hopefully this can be written in a smarter way!!
+        De2, Dn2 = self.grid_J.get_Le_Ln()
+        if self.dipole: # L matrix gives gradient in eastward direction
+            self.Le_J = De2 * lat_w(self.hemisphere * self.grid_J.lat.flatten()).reshape((-1, 1))
+            self.LTLe_J = self.Le_J.T.dot(self.Le_J)
+            self.Ln_J = Dn2
+            self.LTLn_J = self.Ln_J.T.dot(self.Ln_J)
+        else: # L matrix gives gradient in QD eastward direction
+            apx = apexpy.Apex(epoch, refh = refh)
+            mlat, mlon = apx.geo2apex(self.grid_J.lat.flatten(), self.grid_J.lon.flatten(), refh)
+            f1, f2 = apx.basevectors_qd(self.grid_J.lat.flatten(), self.grid_J.lon.flatten(), refh)
+            f1 = f1/np.linalg.norm(f1, axis = 0)
+            self.Le_J = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
+            self.Le_J = self.Le_J * lat_w(self.hemisphere * mlat).reshape((-1, 1))
+            self.LTLe_J = self.Le_J.T.dot(self.Le_J)
+            f2 = f2/np.linalg.norm(f2, axis = 0)
+            self.Ln_J = De2 * f2[0].reshape((-1, 1)) + Dn2 * f2[1].reshape((-1, 1))
+            self.LTLn_J = self.Ln_J.T.dot(self.Ln_J)
 
 
     def clear_model(self, Hall_Pedersen_conductance = None):
@@ -362,51 +387,62 @@ class Emodel(object):
         self.GTd = np.sum(np.array(GTds), axis=0)
 
         # Reguarlization
-        if (l1 > 0 or l2 > 0):
-            gtg_mag = np.median(np.diagonal(self.GTG))
-            
-            # Check for FAC regularization
-            if FAC_reg:
-                # Linear relation between FACs and model parameters
-                G_FAC = self.FAC_matrix()
-                
-                # East/west and north/south 1st derivative of FAC
-                De2, Dn2 = self.grid_J.get_Le_Ln()
-                G_FAC_e = De2.dot(G_FAC)
-                G_FAC_n = Dn2.dot(G_FAC)
-                del G_FAC
-                
-                # l1, l2, l3 FAC roughening matrices
-                LTL_l1 = G_FAC.T.dot(G_FAC)
-                LTL_l2 = G_FAC_e.T.dot(G_FAC_e)
-                LTL_l3 = G_FAC_n.T.dot(G_FAC_n)                
-
-            # Default regularization (not FAC)
-            else:
+        if not FAC_reg and (isinstance(l1, tuple) or isinstance(l2, tuple) or isinstance(l3, tuple)):
+            raise ValueError('l1, l2, and l3 can only be tuple if FAC_reg=True')
+        
+        def reg_E(self, l1, l2, l3):
+            """Calculate the roughening matrix for E (normal) regularization"""
+            LTL = 0
+            if l1 > 0:
                 LTL_l1 = np.eye(self.GTG.shape[0])
-                LTL_l2 = self.LTL
-                LTL_l3 = np.zeros(LTL_l2.shape)
-
-            # Scaling factors
-            ltl_mag_l1 = np.median(LTL_l1.diagonal())
-            ltl_mag_l2 = np.median(LTL_l2.diagonal())
-            ltl_mag_l3 = np.median(LTL_l3.diagonal())
-            
-            # Regularized GTG matrix
-            if FAC_reg and isinstance(l1, tuple):
-                if len(l1) != 2:
-                    raise ValueError('l1 need to be a tuple of length 2.')
-                LTL = l1[0]/ltl_mag_l1*LTL_l1 + l1[1]/np.eye(self.GTG.shape[0])
-            else:
-                LTL = l1/ltl_mag_l1*LTL_l1 
-            LTL += l2/ltl_mag_l2*LTL_l2 + l3/ltl_mag_l3*LTL_l3
-            
-            GG = self.GTG + LTL*gtg_mag
+                LTL += l1 * LTL_l1 / np.median(LTL_l1.diagonal())
+            if l2 > 0:
+                LTL += l2 * self.LTLe / np.median(self.LTLe.diagonal())
+            if l3 > 0:
+                LTL += l3 * self.LTLn / np.median(self.LTLn.diagonal())
+            return LTL
         
-        # No regularization
+        def reg_FAC(self, l1, l2, l3):
+            """Calculate the roughening matrix for FAC regularization"""
+            G_FAC = self.FAC_matrix()
+            LTL = 0
+            if l1 > 0:
+                LTL_l1 = G_FAC.T.dot(G_FAC)
+                LTL += l1 * LTL_l1 / np.median(LTL_l1.diagonal())
+            if l2 > 0:
+                G_FAC_e = self.Le_J.dot(G_FAC)
+                LTL_l2 = G_FAC_e.T.dot(G_FAC_e)
+                LTL += l2 * LTL_l2 / np.median(LTL_l2.diagonal())
+            if l3 > 0:
+                G_FAC_n = self.Ln_J.dot(G_FAC)
+                LTL_l3 = G_FAC_n.T.dot(G_FAC_n)
+                LTL += l3 * LTL_l3 / np.median(LTL_l3.diagonal())
+            return LTL
+        
+        def ensure_tuple(value):
+            """Ensure the value is a tuple of length 2."""
+            if isinstance(value, tuple):
+                if len(value) != 2:
+                    raise ValueError(f"Tuple {value} must have length 2.")
+                return value
+            return (value, 0)
+        
+        LTL = 0
+        if not FAC_reg:
+            LTL += reg_E(self, l1, l2, l3)
+        
+        if FAC_reg and  any(isinstance(x, tuple) for x in (l1, l2, l3)):
+            l1 = ensure_tuple(l1)
+            l2 = ensure_tuple(l2)
+            l3 = ensure_tuple(l3)
+            LTL += reg_FAC(self, l1[0], l2[0], l3[0])
+            LTL += reg_E(self, l1[1], l2[1], l3[1])
         else:
-            GG = self.GTG
+            LTL += reg_FAC(self, l1, l2, l3)
         
+        gtg_mag = np.median(np.diagonal(self.GTG))
+        GG = self.GTG + LTL*gtg_mag
+            
         if 'rcond' in kwargs.keys():
             warnings.warn("'rcond' keyword (and use of np.linalg.lstsq) is deprecated! Use kw 'cond' (for scipy.linalg.lstsq) instead")
             kwargs['cond'] = kwargs['rcond']
