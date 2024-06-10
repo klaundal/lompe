@@ -429,18 +429,18 @@ class Emodel(object):
                 return value
             return (value, 0)
         
-        LTL = 0
         if not FAC_reg:
-            LTL += reg_E(self, l1, l2, l3)
-        
-        if FAC_reg and  any(isinstance(x, tuple) for x in (l1, l2, l3)):
+            LTL = reg_E(self, l1, l2, l3)
+        elif FAC_reg and  any(isinstance(x, tuple) for x in (l1, l2, l3)):
             l1 = ensure_tuple(l1)
             l2 = ensure_tuple(l2)
             l3 = ensure_tuple(l3)
-            LTL += reg_FAC(self, l1[0], l2[0], l3[0])
+            LTL = reg_FAC(self, l1[0], l2[0], l3[0])
             LTL += reg_E(self, l1[1], l2[1], l3[1])
+        elif FAC_reg:
+            LTL = reg_FAC(self, l1, l2, l3)
         else:
-            LTL += reg_FAC(self, l1, l2, l3)
+            LTL = 0
         
         gtg_mag = np.median(np.diagonal(self.GTG))
         GG = self.GTG + LTL*gtg_mag
