@@ -372,7 +372,7 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
 
     # altitude (geodetic)
     tck = interpolate.splrep(matplotlib.dates.date2num(dmsp.index[::60].append(dmsp.index[-1:])),
-                             pd.concat([dmsp.gdlat[::60], (dmsp.gdlat[-1:])]).values, k=2)
+                             pd.concat([dmsp.gdalt[::60], (dmsp.gdalt[-1:])]).values, k=2)
     gdalt = interpolate.splev(matplotlib.dates.date2num(dmsp.index), tck)
 
     # get eastward and northward component of cross track direction
