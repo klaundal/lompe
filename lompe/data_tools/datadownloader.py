@@ -44,8 +44,8 @@ def download_sussi(event, destination='downloads', source='jhuapl'):
                 file_url = urljoin(url, href)
                 try:
                     # Download the file
-                    # probably too much print commented out the print statement if needed
-                    print(f"Downloading {file_url}...")
+                    # probably too much print uncommented the print statement if needed
+                    # print(f"Downloading {file_url}...")
                     response = requests.get(file_url, stream=True)
                     response.raise_for_status()  # raise an HTTPError on bad response
                     filename = os.path.join(
