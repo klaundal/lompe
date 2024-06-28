@@ -16,7 +16,7 @@ def download_sussi(event, destination='downloads', source='jhuapl'):
     Args:
         event (str): format YYYY-MM-DD
         destination (str, optional): where to save the data. Defaults to 'downloads'.
-        source (str, optional): Defaults to 'jhuapl'. cedaweb is the other option.
+        source (str, optional): Defaults to 'jhuapl'. cdaweb is the other option.
 
     Note: I (Fasil) prefer the cdaweb because it is more faster to downlaod.
           but the read_sussi function in lompe package is tailored to the jhuapl data.
