@@ -2,6 +2,7 @@ import numpy as np
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
+import datetime as dt
 import os
 
 
@@ -82,26 +83,9 @@ def download_dmsp():
 def download_swarm():
     pass
 
-
-def date2doy(event):
-    ''' function to compute day of the year given a date string in YYYY-MM-DD format '''
-
-    year, month, day = map(int, event.split('-'))
-
-    # days of each month
-    daysmonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-
-    # check leap year and adjust February days
-    if ((year % 4 == 0 and year % 100 != 0) or (year % 400 == 0)):
-        daysmonth[1] += 1
-
-    # day of the year, doy
-    if month > 1:
-        doy = np.sum(daysmonth[:month-1]) + day
-    else:
-        doy = day
-
-    return int(doy)
+def date2doy(date_str):
+    date = dt.strptime(date_str, "%Y-%m-%d")
+    return date.timetuple().tm_yday
 
 
 if __name__ == '__main__':
