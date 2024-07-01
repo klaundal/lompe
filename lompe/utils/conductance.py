@@ -660,10 +660,11 @@ def hemispheric_power(kp):
 
 def get_coeff(kp, input_file='emean'):
     KK = [1.5, 3, 4.5, 6, 8, 10]
+    basepath = os.path.dirname(__file__)
     if input_file == 'emean':
-        coeff = pd.read_csv('/../data/zhang_paxton_emean_coeff.txt', sep='\t')
+        coeff = pd.read_csv(basepath + '/../data/zhang_paxton_emean_coeff.txt', sep='\t')
     elif input_file == 'eflux':
-        coeff = pd.read_csv('/../data/zhang_paxton_eflux_coeff.txt', sep='\t')
+        coeff = pd.read_csv(basepath + '/../data/zhang_paxton_eflux_coeff.txt', sep='\t')
     else:
         print('Epistein coefficients not found')
     for i, k in enumerate(KK):
