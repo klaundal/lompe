@@ -572,7 +572,9 @@ def robinson_EUV(lon, lat, sigmaH, sigmaP, time, starlight=0, F107=100,
 def ZhangPaxton(mlat, mlt, kp):
     """ Calculate electron flux and mean energy using Zhang-Paxton model.
     Based on the paper: 
-        Y. Zhang, L.J. Paxton, An empirical Kp-dependent global auroral model based on TIMED/GUVI FUV data, Journal of Atmospheric and Solar-Terrestrial Physics, Volume 70, Issues 8-9, 2008, Pages 1231-1242, ISSN 1364-6826, https://doi.org/10.1016/j.jastp.2008.03.008.
+        Y. Zhang, L.J. Paxton, An empirical Kp-dependent global auroral model based on TIMED/GUVI FUV data, 
+        Journal of Atmospheric and Solar-Terrestrial Physics, Volume 70, Issues 8-9, 2008, Pages 1231-1242, 
+        ISSN 1364-6826, https://doi.org/10.1016/j.jastp.2008.03.008.
 
     Args:
         mlat (array): magnetic latitude
