@@ -694,3 +694,87 @@ def ZhangPaxton_conductance(mlat, mlt, kp, hallOrPed='hp'):
         return pedersen_conductance
     else:
         return hall_conductance, pedersen_conductance
+
+
+def ZhangPaxton_EUV(lon, lat, kp, time, hall_or_pedersen='hp', starlight=0, F107=100,
+                    dipole=False, calibration='MoenBrekke1993'):
+    """ calculate conductance at lat, lon for given kp at given time
+    based on ZhangPaxton model + EUV contribution, from the functions defined below
+
+
+    Parameters
+    ----------
+    lon: array
+        geographic longitudes [deg]
+    lat: array
+        geograhpic latitudes [deg]
+    kp: int
+        Kp index (used for Hardy model)
+    time: datetime
+        time, used to get solar zenith angles and for apex coordinate conversion
+    hall_or_pedersen: string
+        specifies type of conductance, 'hall' or 'pedersen'
+    starlight: float, optional
+        constant to add to conductance, often small (e.g. Strobel et al. 1980 https://doi.org/10.1016/0032-0633(80)90050-1)
+        could be used to include "background-conductance" 
+    F107: float, optional
+        F107 index - used to scale EUV conductance. Default is 100
+    dipole : bool, optional
+        set to True if lat and lon are dipole coordinates. Default is False
+    calibration: string, optional
+        calibration to use in EUV_conductance calculation. See documentation
+        of EUV_conductance function for info
+
+    Returns
+    -------
+    If hall_or_pedersen == 'hall':
+        Total Hall conductances [mho] for each lat, lon
+    If hall_or_pedersen == 'pedersen':
+        Total Pedersen conductances [mho] for each lat, lon
+    If hall_or_pedersen == 'hallandpedersen' or 'hp':
+        Two arrays of conductances [mho] for each lat, lon, 
+        one for total Hall and one for total Pedersen 
+
+    """
+    assert hall_or_pedersen.lower() in ['hall', 'h', 'pedersen', 'p', 'hp',
+                                        'hallandpedersen'], "ZhangPaxton_EUV: hall_or_pedersen must be either hall or pedersen, or hallandpedersen"
+
+    lat, lon = np.array(lat, ndmin=1), np.array(lon, ndmin=1)
+    shape = np.broadcast(lat, lon).shape
+    lat, lon = lat.flatten(), lon.flatten()
+
+    cd = Dipole(time.year)
+    if dipole:
+        mlat, mlon = lat, lon  # input lat, lon is centered dipole
+        lat, lon = cd.mag2geo(lat, lon)  # to geographic
+    else:
+        a = apexpy.Apex(time, 110)
+        mlat, mlon = a.geo2apex(lat, lon, 110)  # to mag
+    mlt = cd.mlon2mlt(mlon, time)     # get mlt
+
+    # solar zenith angles for EUV conductances
+    sza = sunlight.sza(lat, lon, time)
+
+    if hall_or_pedersen.lower() in 'hall':
+        hop = 'h'
+    if hall_or_pedersen.lower() in 'pedersen':
+        hop = 'p'
+    if hall_or_pedersen.lower() in ['hp', 'hallandpedersen']:
+        hop = 'hp'
+
+    if len(hop) > 1:
+        EUVh, EUVp = EUV_conductance(
+            sza, F107, hop, calibration=calibration)  # EUV
+        hc_hall, hc_pedersen = ZhangPaxton_conductance(
+            mlat, mlt, kp, hop)                        # auroral
+    else:
+        EUV = EUV_conductance(sza, F107, hop, calibration=calibration)  # EUV
+        # auroral
+        hc = ZhangPaxton_conductance(mlat, mlt, kp, hop)
+
+    if hop == 'h':
+        return (np.sqrt(hc**2 + EUV**2 + starlight**2)).reshape(shape)
+    elif hop == 'p':
+        return (np.sqrt(hc**2 + EUV**2 + starlight**2)).reshape(shape)
+    else:
+        return (np.sqrt(hc_hall**2 + EUVh**2 + starlight**2)).reshape(shape), (np.sqrt(hc_pedersen**2 + EUVp**2 + starlight**2)).reshape(shape)
