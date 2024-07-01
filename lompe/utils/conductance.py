@@ -662,9 +662,11 @@ def get_coeff(kp, input_file='emean'):
     KK = [1.5, 3, 4.5, 6, 8, 10]
     basepath = os.path.dirname(__file__)
     if input_file == 'emean':
-        coeff = pd.read_csv(basepath + '/../data/zhang_paxton_emean_coeff.txt', sep='\t')
+        coeff = pd.read_csv(
+            basepath + '/../data/zhang_paxton_emean_coeff.txt', sep='\t')
     elif input_file == 'eflux':
-        coeff = pd.read_csv(basepath + '/../data/zhang_paxton_eflux_coeff.txt', sep='\t')
+        coeff = pd.read_csv(
+            basepath + '/../data/zhang_paxton_eflux_coeff.txt', sep='\t')
     else:
         print('Epistein coefficients not found')
     for i, k in enumerate(KK):
@@ -678,7 +680,7 @@ def get_coeff(kp, input_file='emean'):
     return coeff_L, coeff_U
 
 
-def ZhangPaxton_conductance(mlat, mlt, kp):
+def ZhangPaxton_conductance(mlat, mlt, kp, hallOrPed='hp'):
     # calculates the conductance (pedersen and hall) for a given Kp index using Robinson 1987 paper
     # https://agupubs.onlinelibrary.wiley.com/doi/10.1029/JA092iA03p02565
     eflux, emean = ZhangPaxton(mlat, mlt, kp)
@@ -686,4 +688,9 @@ def ZhangPaxton_conductance(mlat, mlt, kp):
         (40 * emean)/(16 + emean**2))*(eflux**(1/2))
     hall_conductance = (0.45 * (emean**0.85)
                         )*pedersen_conductance
-    return hall_conductance, pedersen_conductance
+    if hallOrPed.lower() == 'h':
+        return hall_conductance
+    elif hallOrPed.lower() == 'p':
+        return pedersen_conductance
+    else:
+        return hall_conductance, pedersen_conductance
