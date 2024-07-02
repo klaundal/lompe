@@ -83,8 +83,9 @@ def download_dmsp():
 def download_swarm():
     pass
 
+
 def date2doy(date_str):
-    date = dt.strptime(date_str, "%Y-%m-%d")
+    date = dt.datetime.strptime(date_str, "%Y-%m-%d")
     return date.timetuple().tm_yday
 
 
