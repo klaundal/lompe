@@ -275,7 +275,7 @@ class Emodel(object):
         return save_model(self, time=time, save=parameters_to_save, **kwargs)
         
     def run_inversion(self, l1 = 0, l2 = 0, l3 = 0, FAC_reg=False,
-                      data_density_weight = True, perimeter_width = 10,
+                      data_density_weight = True, perimeter_width = 10, save_matrices=False,
                       **kwargs):
         """ Calculate model vector
 
@@ -305,6 +305,8 @@ class Emodel(object):
             when choosing the data to be included in the inversion. Default is 10,
             which means that a 10 cell wide perimeter around the model inner
             grid will be included. 
+        save_matrices : bool, optional
+            Set to True to save G, d, and w in the lompe model object.
 
         **kwargs : dict
             key arguments to be passed to the scipy.linalg.lstsq (e.g., 'cond', 'lapack_driver').
@@ -312,9 +314,10 @@ class Emodel(object):
         """
 
         # initialize G matrices
-        #self._G = np.empty((0, self.grid_E.size))
-        #self._d = np.empty( 0)
-        #self._w = np.empty( 0)
+        if save_matrices:
+            self._G = np.empty((0, self.grid_E.size))
+            self._d = np.empty( 0)
+            self._w = np.empty( 0)
 
         # make expanded grid for calculation of data density:
         self.biggrid = cs.CSgrid(self.grid_J.projection,
@@ -373,10 +376,11 @@ class Emodel(object):
                     w_i = spatial_weight * 1/(error**2) * iweights[ii]
                     if iweights[ii] != 1:
                         print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
-                                    
-                    #self._G = np.vstack((self._G, G))
-                    #self._d = np.hstack((self._d, np.hstack(ds.values)))
-                    #self._w = np.hstack((self._w, w_i))
+
+                    if save_matrices:
+                        self._G = np.vstack((self._G, G))
+                        self._d = np.hstack((self._d, np.hstack(ds.values)))
+                        self._w = np.hstack((self._w, w_i))
 
                     GTG_i = G.T.dot(np.diag(w_i)).dot(G)
                     GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
