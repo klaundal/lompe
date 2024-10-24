@@ -11,6 +11,13 @@ from .varcheck import check_input, extrapolation_check
 import scipy
 import warnings
 
+try:
+    import cupy as cp
+    import gc
+    gpu_avail = True
+except:
+    gpu_avail = False
+
 RE = 6371.2e3 # Earth radius in meters
 
 class Emodel(object):
@@ -275,7 +282,8 @@ class Emodel(object):
         return save_model(self, time=time, save=parameters_to_save, **kwargs)
         
     def run_inversion(self, l1 = 0, l2 = 0, l3 = 0, FAC_reg=False,
-                      data_density_weight = True, perimeter_width = 10, save_matrices=False,
+                      data_density_weight = True, perimeter_width = 10, 
+                      save_matrices=False, use_gpu=False,
                       **kwargs):
         """ Calculate model vector
 
@@ -458,7 +466,12 @@ class Emodel(object):
         if 'lapack_driver' not in kwargs.keys():
             kwargs['lapack_driver'] = 'gelsd'
 
-        self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
+        if gpu_avail and use_gpu:            
+            self.Cmpost = cp.asnumpy(cp.linalg.solve(cp.array(GG), cp.array(np.eye(GG.shape[0]))))
+            cp.get_default_memory_pool().free_all_blocks()
+            cp.cuda.Device().synchronize()
+            gc.collect()
+
         self.Rmatrix = self.Cmpost.dot(self.GTG)
         self.m = self.Cmpost.dot(self.GTd)
 
