@@ -471,6 +471,8 @@ class Emodel(object):
             cp.get_default_memory_pool().free_all_blocks()
             cp.cuda.Device().synchronize()
             gc.collect()
+        else:
+            self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
 
         self.Rmatrix = self.Cmpost.dot(self.GTG)
         self.m = self.Cmpost.dot(self.GTd)
