@@ -1,6 +1,6 @@
 from lompe.model import Emodel
 from lompe.model import Data
-from lompe.model import lompeplot
+from lompe.model import lompeplot, lompeplot_DF
 from polplot import Polarplot
 from lompe.utils import sunlight
 from lompe.utils import conductance

@@ -64,6 +64,17 @@ funcs = {'efield':           'E',
          'pedersen':         'pedersen_conductance',
          'secs_current':     'get_B_SECS_currents'} # This attribute doesn't exist currently
 
+funcs_DF = {'efield':           'E_DF', 
+            'convection':       'v_DF', 
+            'ground_mag':       'B_ground_DF',
+            'electric_current': 'j_DF',
+            'space_mag_fac':    'B_space_FAC_DF',
+            'space_mag_full':   'B_space_DF',
+            'fac':              'FAC_DF',
+            'hall':             'hall_conductance',
+            'pedersen':         'pedersen_conductance',
+            'secs_current':     'get_B_SECS_currents'} # This attribute doesn't exist currently
+
 # GLOBAL PARAMETERS DONE
 ########################
 
@@ -204,7 +215,7 @@ def format_ax(ax, model, apex = None, **kwargs):
 
 #####################
 # PLOTTING FUNCTIONS 
-def plot_quiver(ax, model, dtype, scale = None, **kwargs):
+def plot_quiver(ax, model, dtype, scale = None, DF=False, **kwargs):
     """ quiver plot of dtype on uniform grid
     
     parameters
@@ -237,8 +248,10 @@ def plot_quiver(ax, model, dtype, scale = None, **kwargs):
     if 'scale_units' not in kwargs.keys():
         kwargs['scale_units'] = 'inches'
 
-
-    func = getattr(model, funcs[dtype])
+    if DF:
+        func = getattr(model, funcs_DF[dtype])
+    else:
+        func = getattr(model, funcs[dtype])
     sh = np.array(model.grid_J.shape)
 
     # get function values on plotting grid:
@@ -283,7 +296,7 @@ def plot_quiver(ax, model, dtype, scale = None, **kwargs):
     return ax.quiver(x, y, Ax, Ay, **kwargs)
 
 
-def plot_contour(ax, model, dtype, vertical = False, **kwargs):
+def plot_contour(ax, model, dtype, vertical = False, DF=False, **kwargs):
     """ plot parameters as contour plot  
     
     parameters
@@ -300,8 +313,10 @@ def plot_contour(ax, model, dtype, vertical = False, **kwargs):
     kwargs: passed to contourf function
 
     """
-
-    func = getattr(model, funcs[dtype])
+    if DF:
+        func = getattr(model, funcs_DF[dtype])
+    else:
+        func = getattr(model, funcs[dtype])
 
     A = func()
     if len(A) not in [2, 3]: 
@@ -443,7 +458,7 @@ def plot_potential(ax, model, **kwargs):
         default contour interval is set to 5 kV. Change by specifying
         a different 'levels' value.
     """
-
+    
     V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
     V = V - V.min() - (V.max() - V.min())/2
 
@@ -561,8 +576,6 @@ def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
     S = S.reshape(model.grid_J.shape)
     ax.pcolormesh(model.grid_J.xi_mesh, model.grid_J.eta_mesh, S, **kwargs)
     
-
-
 def lompeplot(model, figheight = 9, include_data = False, show_data_location= False, apex = None, time = None, 
                      savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
                      debug = False, return_axes = False):
@@ -686,6 +699,187 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     # -----------------
     ax = axes[1, 2]
     plot_quiver(ax, model, 'electric_current')
+    ax.set_title('Electric currents')
+    if debug:
+        plot_SECS_amplitudes(ax, model, curl_free = True)
+        plot_quiver(ax, model, 'SECS_current', color = 'C2')
+
+    # Polarplot
+    # ---------
+    if time != None and apex != None:
+        ax = plt.subplot2grid((20, 4), (0, 3), rowspan = 10) 
+        polarplot(ax, model, apex, time, dV = 5, **clkw)
+
+    # Make scales
+    #------------
+    cbarax1 = plt.subplot2grid((20, 40), (16, 32), rowspan = 1, colspan = 7)
+    cbarax2 = plt.subplot2grid((20, 40), (12, 32), rowspan = 1, colspan = 7)
+
+    arrowax = plt.subplot2grid((20, 40), (19, 31), rowspan = 1, colspan = 8)
+
+    arrowax.set_axis_off()
+    arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')
+    arrowax.set_ylim(0, 1)
+    arrowax.set_xlim(0, 20)
+    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_full'] * 1e9 // 2, quiverscales['electric_current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top')
+
+    if time != None:
+        cbarax2.set_title(str(time) + ' UT', fontweight = 'bold')
+
+    fac_levels = colorscales['fac']
+    xx = np.vstack((fac_levels, fac_levels)) * 1e6
+    yy = np.vstack((np.zeros_like(fac_levels), np.ones_like(fac_levels)))
+    cbarax1.contourf(xx, yy, xx, cmap = plt.cm.bwr, levels = fac_levels * 1e6)
+    cbarax1.set_xlabel('$\mu$A/m$^2$')
+    cbarax1.set_yticks([])
+    buax = plt.twiny(cbarax1)
+    buax.set_xlim(colorscales['ground_mag'].min() *1e9, colorscales['ground_mag'].max() * 1e9)
+    buax.set_xlabel('nT')
+
+    conductance_levels = colorscales['hall']
+    xx = np.vstack((conductance_levels, conductance_levels)) 
+    yy = np.vstack((np.zeros_like(conductance_levels), np.ones_like(conductance_levels)))
+    cbarax2.contourf(xx, yy, xx, levels = conductance_levels, cmap = CMAP)
+    cbarax2.set_xlabel('mho')
+    cbarax2.set_yticks([])
+
+
+    # Finish
+    # ------
+    plt.subplots_adjust(top=0.91, bottom=0.065, left=0.01, right=0.99, hspace=0.1, wspace=0.02) 
+
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+    if return_axes==True:
+        return fig, axes, arrowax, [cbarax1, cbarax2]
+    else:
+        return fig
+
+def lompeplot_DF(model, figheight = 9, include_data = False, show_data_location= False, apex = None, time = None, 
+                     savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
+                     debug = False, return_axes = False):
+    """ produce a summary plot of lompe parameters. 
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        figheight: float, optional
+            figure height - the width is determined automatically based on aspect ratios,
+            and (width, height) is the figsize given to matplotlib.pyplot.figure
+        include_data: bool, optional
+            set to True if you want to also plot data. False (default) if not
+        show_data_location: bool, optional
+            will scatter the locations of data. The default is False and the locations
+            won't be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        time: datetime, optional
+            specify if you want magnetic local time
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        clkw: dictionary, optional
+            keywords for Polarplot.coastlines(), used to show coastlines in polarplot. Ignored 
+            if apex or time are not specified        
+        quiverscales: dict, optional
+            dictionary of scales (in inches) to use for quiver plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        colorscales: dict, optional
+            dictionary of colorscales to use in contour plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        degbug: bool, optional
+            set to True to show SECS currents and CF current amplitudes
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+
+    """
+
+    if quiverscales == None:
+        quiverscales = QUIVERSCALES
+    else:
+        QUIVERSCALES.update(quiverscales)
+        quiverscales = QUIVERSCALES
+
+    if colorscales == None:
+        colorscales = COLORSCALES
+    else:
+        COLORSCALES.update(colorscales)
+        colorscales = COLORSCALES
+
+    # Set up figures
+    # --------------
+    ar = model.grid_E.shape[1] / model.grid_E.shape[0] # aspect ratio
+    figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+
+    fig = plt.figure(figsize = figsize)
+    axes = np.vstack(([plt.subplot2grid((20, 4), ( 0, j), rowspan = 10) for j in range(3)],
+                      [plt.subplot2grid((20, 4), (10, j), rowspan = 10) for j in range(3)]))
+    for ax in axes.flatten():
+        format_ax(ax, model, apex = apex)
+
+    # Velocity
+    # --------
+    ax = axes[0, 0]
+    plot_quiver(ax, model, 'convection', DF=True)
+    plot_potential(ax, model)
+    if show_data_location:
+        plot_locations(ax, model, 'convection')
+    if include_data:
+        plot_datasets(ax, model, 'convection')
+    ax.set_title('Convection velocity and electric potential')
+
+    # Space magnetic field
+    # --------------------
+    ax = axes[0, 1]
+    plot_quiver(  ax, model, 'space_mag_fac', DF=True)
+    plot_contour( ax, model, 'fac', DF=True)
+    if show_data_location:
+        plot_locations(ax, model, 'space_mag_fac')
+        plot_locations(ax, model, 'fac')
+
+    if include_data:
+        plot_datasets(ax, model, 'space_mag_fac')
+        plot_datasets(ax, model, 'space_mag_full')
+    ax.set_title('FAC and magnetic field')
+
+    # Ground magnetic field
+    # ---------------------
+    ax = axes[0, 2]
+    plot_quiver(  ax, model, 'ground_mag', DF=True)
+    plot_contour( ax, model, 'ground_mag', vertical = True, DF=True)
+    if show_data_location:
+        plot_locations(ax, model, 'ground_mag')
+    if include_data:
+        plot_datasets(ax, model, 'ground_mag')
+    ax.set_title('Ground magnetic field')
+
+    # Hall conductance
+    # ----------------
+    ax = axes[1, 0]
+    plot_contour(ax, model, 'hall')
+    plot_coastlines(ax, model, color = 'grey')
+    if time != None and apex != None:
+        plot_mlt(ax, model, time, apex, color = 'grey')
+    ax.set_title('Hall conductance')
+
+    # Pedersen conductance
+    # --------------------
+    ax = axes[1, 1]
+    plot_contour(ax, model, 'pedersen')
+    plot_coastlines(ax, model, color = 'grey')
+    if time != None and apex != None:
+        plot_mlt(ax, model, time, apex, color = 'grey')
+    ax.set_title('Pedersen conductance')
+
+    # Current densities
+    # -----------------
+    ax = axes[1, 2]
+    plot_quiver(ax, model, 'electric_current', DF=True)
     ax.set_title('Electric currents')
     if debug:
         plot_SECS_amplitudes(ax, model, curl_free = True)

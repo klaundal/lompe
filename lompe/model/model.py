@@ -842,6 +842,36 @@ class Emodel(object):
         return Ee, En
 
     @extrapolation_check
+    def E_DF(self, lon = None, lat = None):
+        """
+        Calculate electric field vector components
+
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Must have same shape as lon
+
+        Returns
+        -------
+        Ee : array
+            Eastward components of the electric field [V/m]. Same shape as lon / lat
+        En : array
+            Northward components of the electric field [V/m]. Same shape as lon / lat
+        """
+
+        if self.m is None:
+            raise Exception('Model vector not defined yet. Add data and call run_inversion()')
+
+        Ee, En, shape = self._E_matrix_DF(lon, lat, return_shape = True)
+        return Ee.dot(self.m).reshape(shape), En.dot(self.m).reshape(shape)
+
+    @extrapolation_check
     def E(self, lon = None, lat = None):
         """
         Calculate electric field vector components
@@ -968,7 +998,35 @@ class Emodel(object):
         Ve, Vn, shape = self._v_matrix(lon, lat, return_shape = True)
         return Ve.dot(self.m).reshape(shape), Vn.dot(self.m).reshape(shape)
 
+    @extrapolation_check
+    def v_DF(self, lon = None, lat = None):
+        """
+        Calculate velocity vector components
 
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Must have same shape as lon
+
+        Returns
+        -------
+        ve : array
+            Eastward components of the convection velocity [m/s]. Same shape as lon / lat
+        vn : array
+            Northward components of the convection velocity [m/s]. Same shape as lon / lat
+        """
+
+        if self.m is None:
+            raise Exception('Model vector not defined yet. Add data and call run_inversion()')
+
+        Ve, Vn, shape = self._v_matrix_DF(lon, lat, return_shape = True)
+        return Ve.dot(self.m).reshape(shape), Vn.dot(self.m).reshape(shape)
 
     # MAGNETIC FIELDS
     @check_input
@@ -1189,6 +1247,91 @@ class Emodel(object):
         return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
 
     @extrapolation_check
+    def B_ground_DF(self, lon = None, lat = None, r = None):
+        """
+        Calculate ground magnetic field perturbation vectors
+
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of *outer* grid points,
+            (see self.grid_E). Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of *outer* grid points,
+            (see self.grid_E). Must have same shape as lon
+        r : array, optional
+            Radius [m] of the evaluation points, default is Earth radius. Must have a shape that is
+            consistent with lon and lat. Broadcasting rules apply
+
+
+        Returns
+        -------
+        Be : array
+            Eastward components of the ground magnetic field perturbation [T]. Same shape as lon / lat
+        Bn : array
+            Northward components of the ground magnetic field perturbation [T]. Same shape as lon / lat
+        Bu : array
+            Upward components of the ground magnetic field perturbation [T]. Same shape as lon / lat
+
+        """
+
+        if self.m is None:
+            raise Exception('Model vector not defined yet. Add data and call run_inversion()')
+
+        BBB, shape = self._B_df_matrix_DF(lon, lat, r, return_shape = True)
+        Be, Bn, Bu = np.split(np.ravel(BBB.dot(self.m)), 3)
+
+        return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
+
+    @extrapolation_check
+    def B_space_DF(self, lon = None, lat = None, r = None, include_df = True):
+        """
+        Calculate space magnetic field perturbation vectors
+
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of *outer* grid points,
+            (see self.grid_E). Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of *outer* grid points,
+            (see self.grid_E). Must have same shape as lon
+        r : array, optional
+            Radius [m] of the evaluation points, default is the radius corresponding to twice the
+            height of the ionosphere. Must have a shape that is consistent with lon and lat.
+            Broadcasting rules apply
+
+        Returns
+        -------
+        Be : array
+            Eastward components of the space magnetic field perturbation [T]. Same shape as lon / lat
+        Bn : array
+            Northward components of the space magnetic field perturbation [T]. Same shape as lon / lat
+        Bu : array
+            Upward components of the space magnetic field perturbation [T]. Same shape as lon / lat
+        """
+
+        if self.m is None:
+            raise Exception('Model vector not defined yet. Add data and call run_inversion()')
+
+        # handle default r:
+        if r is None: r = self.R * 2 - RE
+
+        BBB, shape = self._B_cf_matrix_DF(lon, lat, r, return_shape = True)
+        Be, Bn, Bu = np.split(np.ravel(BBB.dot(self.m)), 3)
+
+        if include_df:
+            BBB = self._B_df_matrix_DF(lon, lat, r, return_shape = False)
+            Be_df, Bn_df, Bu_df = np.split(np.ravel(BBB.dot(self.m)), 3)
+            Be, Bn, Bu = Be + Be_df, Bn + Bn_df, Bu + Bu_df
+
+        return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
+
+    @extrapolation_check
     def B_space(self, lon = None, lat = None, r = None, include_df = True):
         """
         Calculate space magnetic field perturbation vectors
@@ -1267,6 +1410,40 @@ class Emodel(object):
         """
 
         return self.B_space(lon = lon, lat = lat, r = r, include_df = False)
+
+    @extrapolation_check
+    def B_space_FAC_DF(self, lon = None, lat = None, r = None):
+        """
+        Calculate the space magnetic field perturbation vectors that
+        correspond to field-aligned currents. Ignoring the effect of
+        divergence-free currents.
+
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of *outer* grid points,
+            (see self.grid_E). Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of *outer* grid points,
+            (see self.grid_E). Must have same shape as lon
+        r : array, optional
+            Radius [m] of the evaluation points, default is the radius corresponding to twice the
+            height of the ionosphere. Must have a shape that is consistent with lon and lat.
+            Broadcasting rules apply
+
+        Returns
+        -------
+        Be : array
+            Eastward components of the space magnetic field perturbation [T]. Same shape as lon / lat
+        Bn : array
+            Northward components of the space magnetic field perturbation [T]. Same shape as lon / lat
+        Bu : array
+            Upward components of the space magnetic field perturbation [T]. Same shape as lon / lat
+        """
+
+        return self.B_space_DF(lon = lon, lat = lat, r = r, include_df = False)
 
     @extrapolation_check
     def FAC_matrix(self, lon = None, lat = None):
@@ -1361,6 +1538,48 @@ class Emodel(object):
 
         return je.reshape(shape), jn.reshape(shape)
 
+    # CURRENTS
+    @check_input
+    def j_DF(self, lon = None, lat = None):
+        """
+        Calculate the horizontal ionospheric surface current density
+
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of interior grid points.
+            Must have same shape as lon
+
+        Returns
+        -------
+        je : array
+            Eastward components of the horizontal surface current density [A/m]. Same shape as lon / lat
+        jn : array
+            Northward components of the horizontal surface current density [A/m]. Same shape as lon / lat
+
+        See also
+        --------
+        get_SECS_currents : Calculate current based on SECS, not Ohm's law (should be consistent!)
+        """
+
+        shape = np.broadcast(lon, lat).shape
+
+        # get conductances
+        SH = self.hall_conductance(    lon, lat)
+        SP = self.pedersen_conductance(lon, lat)
+
+        # electric field:
+        Ee, En = self.E_DF(lon, lat)
+
+        je = Ee * SP + SH * En * self.hemisphere
+        jn = En * SP - SH * Ee * self.hemisphere
+
+        return je.reshape(shape), jn.reshape(shape)
 
     @check_input
     def FAC(self, lon = None, lat = None):
@@ -1423,6 +1642,66 @@ class Emodel(object):
         # return
         return ju.reshape(shape)
 
+    @check_input
+    def FAC_DF(self, lon = None, lat = None):
+        """
+        Calculate the upward volume current density. The calculation is performed by
+        estimating the divergence of the Ohm's law currents.
+
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of exterior grid points (grid_E).
+            Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of exterior grid points (grid_E).
+            Must have same shape as lon
+
+        Returns
+        -------
+        ju : array
+            Upward current density [A/m^2]
+
+        Note
+        ----
+        The FACs are calculated on grid using numerical differentiation, and then interpolated
+        to the requested coordinates using griddata.
+
+        """
+
+        shape = np.broadcast(lon, lat).shape
+
+        # get conductances on grid
+        SH = self.hall_conductance(    self.grid_J.lon.flatten(), self.grid_J.lat.flatten())
+        SP = self.pedersen_conductance(self.grid_J.lon.flatten(), self.grid_J.lat.flatten())
+
+        # electric field on grid:
+        Ee, En = self.E_DF(self.grid_J.lon.flatten(), self.grid_J.lat.flatten())
+        Ee, En = Ee, En
+
+        # currents on grid
+        je = Ee * SP + SH * En * self.hemisphere
+        jn = En * SP - SH * Ee * self.hemisphere
+
+        # upward current on grid is negative divergence:
+        ju_ = -self.Ddiv.dot(np.hstack((je, jn)))
+
+        # interpolate to desired coords if necessary
+        xi, eta = self.grid_J.projection.geo2cube(lon, lat) # cs coords
+        try: # if the input grid is equal grid_J, skip interpolation
+            if np.all(np.isclose(xi - self.grid_J.xi.flatten(), 0)) & \
+               np.all(np.isclose(eta - self.grid_J.eta.flatten(), 0)):
+                return ju_.reshape(shape)
+        except:
+            pass
+
+        gridcoords = np.vstack((self.grid_J.xi.flatten(), self.grid_J.eta.flatten())).T
+        ju = griddata(gridcoords, ju_, np.vstack((xi, eta)).T)
+
+        # return
+        return ju.reshape(shape)
 
     @check_input
     def get_SECS_currents(self, lon = None, lat = None):
