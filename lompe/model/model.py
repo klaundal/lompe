@@ -68,13 +68,13 @@ class Emodel(object):
 
         # function that tunes the east west regularization
         if ew_regularization_limit is None:
-            lat_w = lambda lat: lat*0 + 1.
+            self.lat_w = lambda lat: lat*0 + 1.
         else:
             try:
                 a, b = ew_regularization_limit
             except:
                 raise Exception('ew_regularization_limit should have two and only two values')
-            lat_w = lambda lat: np.where(lat < a, 1, np.where(lat > b, 0, (b - lat) / (b - a)))
+            self.lat_w = lambda lat: np.where(lat < a, 1, np.where(lat > b, 0, (b - lat) / (b - a)))
 
 
         # set up inner and outer grids:
@@ -103,12 +103,12 @@ class Emodel(object):
         self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance)
 
         # calculate main field values for all grid points
-        refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
+        self.refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
         if self.dipole:
             Bn, Bu = Dipole(self.epoch).B(self.lat_E, self.grid_E.R * 1e-3)
             Be = np.zeros_like(Bn)
         else: # use IGRF
-            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, refh, yearfrac_to_datetime([self.epoch]))
+            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, self.refh, yearfrac_to_datetime([self.epoch]))
         Be, Bn, Bu = Be * 1e-9, Bn * 1e-9, Bu * 1e-9 # nT -> T
         self.B0 = np.sqrt(Be**2 + Bn**2 + Bu**2).reshape((1, -1))
         self.Bu = Bu.reshape((1, -1))
@@ -140,43 +140,34 @@ class Emodel(object):
         self.QiA = np.linalg.pinv(self.Q, hermitian = True).dot(self.A)
 
         # matrix L that calculates derivative in magnetic eastward direction on grid_E:
-        De2, Dn2 = self.grid_E.get_Le_Ln()
-        if self.dipole: # L matrix gives gradient in eastward direction
-            self.Le = De2 * lat_w(self.hemisphere * self.grid_E.lat.flatten()).reshape((-1, 1))
-            self.LTLe = self.Le.T.dot(self.Le)
-            self.Ln = Dn2
-            self.LTLn = self.Ln.T.dot(self.Ln)
-        else: # L matrix gives gradient in QD eastward direction
-            apx = apexpy.Apex(epoch, refh = refh)
-            mlat, mlon = apx.geo2apex(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
-            f1, f2 = apx.basevectors_qd(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
-            f1 = f1/np.linalg.norm(f1, axis = 0)
-            self.Le = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
-            self.Le = self.Le * lat_w(self.hemisphere * mlat).reshape((-1, 1))
-            self.LTLe = self.Le.T.dot(self.Le)
-            f2 = f2/np.linalg.norm(f2, axis = 0)
-            self.Ln = De2 * f2[0].reshape((-1, 1)) + Dn2 * f2[1].reshape((-1, 1))
-            self.LTLn = self.Ln.T.dot(self.Ln)
-            
-        # matrix L that calculates derivative in magnetic eastward direction on grid_J:
-        # Hopefully this can be written in a smarter way!!
-        De2, Dn2 = self.grid_J.get_Le_Ln()
-        if self.dipole: # L matrix gives gradient in eastward direction
-            self.Le_J = De2 * lat_w(self.hemisphere * self.grid_J.lat.flatten()).reshape((-1, 1))
-            self.LTLe_J = self.Le_J.T.dot(self.Le_J)
-            self.Ln_J = Dn2
-            self.LTLn_J = self.Ln_J.T.dot(self.Ln_J)
-        else: # L matrix gives gradient in QD eastward direction
-            apx = apexpy.Apex(epoch, refh = refh)
-            mlat, mlon = apx.geo2apex(self.grid_J.lat.flatten(), self.grid_J.lon.flatten(), refh)
-            f1, f2 = apx.basevectors_qd(self.grid_J.lat.flatten(), self.grid_J.lon.flatten(), refh)
-            f1 = f1/np.linalg.norm(f1, axis = 0)
-            self.Le_J = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
-            self.Le_J = self.Le_J * lat_w(self.hemisphere * mlat).reshape((-1, 1))
-            self.LTLe_J = self.Le_J.T.dot(self.Le_J)
-            f2 = f2/np.linalg.norm(f2, axis = 0)
-            self.Ln_J = De2 * f2[0].reshape((-1, 1)) + Dn2 * f2[1].reshape((-1, 1))
-            self.LTLn_J = self.Ln_J.T.dot(self.Ln_J)
+        self.Le  , self.Ln  , self.LTLe  , self.LTLn   = self.compute_L_matrices(self.grid_E)
+        self.Le_J, self.Ln_J, self.LTLe_J, self.LTLn_J = self.compute_L_matrices(self.grid_J)
+
+
+    def compute_L_matrices(self, grid):
+        """
+        Computes Le and Ln matrices for a given grid.
+        """
+        De, Dn = grid.get_Le_Ln()
+        if self.dipole: # dipole east/north directions on dipole grid
+            Le = De * self.lat_w(self.hemisphere * grid.lat.flatten()).reshape((-1, 1))
+            Ln = Dn
+        else: # QD east/north directions on geographic grid
+            apx = apexpy.Apex(self.epoch, refh = self.refh)
+            mlat, mlon = apx.geo2apex(grid.lat.flatten(), grid.lon.flatten(), self.refh)
+            f1, f2 = apx.basevectors_qd(grid.lat.flatten(), grid.lon.flatten(), self.refh)
+
+            f1 = f1 / np.linalg.norm(f1, axis=0)
+            Le = De * f1[0].reshape((-1, 1)) + Dn * f1[1].reshape((-1, 1))
+            Le = Le * self.lat_w(self.hemisphere * mlat).reshape((-1, 1))
+
+            f2 = f2 / np.linalg.norm(f2, axis=0)
+            Ln = De * f2[0].reshape((-1, 1)) + Dn * f2[1].reshape((-1, 1))
+
+        LTLe = Le.T.dot(Le)
+        LTLn = Ln.T.dot(Ln)
+
+        return Le, Ln, LTLe, LTLn
 
 
     def clear_model(self, Hall_Pedersen_conductance = None):
