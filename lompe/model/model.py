@@ -19,7 +19,8 @@ class Emodel(object):
                        epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
                        dipole = False, # set to True to use dipole field and dipole coords
                        perfect_conductor_radius = None,
-                       ew_regularization_limit = None
+                       ew_regularization_limit = None,
+                       custom_dominant_direction = None
                 ):
         """
         Electric field model
@@ -60,21 +61,32 @@ class Emodel(object):
             Specify a tuple of two latitudes between which the east-west regularization term is
             reduced to zero towards the magnetic pole. The motivation for this is that east-west 
             regularization is not appropriate in the polar cap, and it might be better to turn it off there
+        custom_dominant_direction: function, optional
+            Define the 'dominant' direction of the solution. By default, the dominant direction is magnetic
+            east-west, meaning that we encourage arc-like structures, and that arcs are oriented along QD
+            east-west. To override this, provide a function that returns a vector along a custom dominant
+            direction for given lon/lat. The direction can be variable across the grid. The function should 
+            handle array input, and it should output a 2 x N array that has the eastward components of the 
+            dominant direction in the first row, and the northwar dcomponents on the second row 
+            (the sign of the vector doesn't matter)
         """
         # options
         self.perfect_conductor_radius = perfect_conductor_radius
         self.dipole = dipole
         self.epoch = epoch
 
+        self.custom_dominant_direction = custom_dominant_direction
+
+
         # function that tunes the east west regularization
         if ew_regularization_limit is None:
-            self.lat_w = lambda lat: lat*0 + 1.
+            self.lat_w = lambda lat: np.ones((lat.size, 1))
         else:
             try:
                 a, b = ew_regularization_limit
             except:
                 raise Exception('ew_regularization_limit should have two and only two values')
-            self.lat_w = lambda lat: np.where(lat < a, 1, np.where(lat > b, 0, (b - lat) / (b - a)))
+            self.lat_w = lambda lat: np.where(lat < a, 1, np.where(lat > b, 0, (b - lat) / (b - a))).reshape((-1, 1))
 
 
         # set up inner and outer grids:
@@ -150,19 +162,23 @@ class Emodel(object):
         """
         De, Dn = grid.get_Le_Ln()
         if self.dipole: # dipole east/north directions on dipole grid
-            Le = De * self.lat_w(self.hemisphere * grid.lat.flatten()).reshape((-1, 1))
-            Ln = Dn
-        else: # QD east/north directions on geographic grid
-            apx = apexpy.Apex(self.epoch, refh = self.refh)
-            mlat, mlon = apx.geo2apex(grid.lat.flatten(), grid.lon.flatten(), self.refh)
-            f1, f2 = apx.basevectors_qd(grid.lat.flatten(), grid.lon.flatten(), self.refh)
+            Le = De * self.lat_w(self.hemisphere * grid.lat.flatten())
+            Ln = Dn * self.lat_w(self.hemisphere * grid.lat.flatten())
+        else: # east/north directions (QD or user-defined) on geographic grid
+            if self.custom_dominant_direction is not None: # f1 is defined by user:
+                f1 = self.custom_dominant_direction(grid.lon.flatten(), grid.lat.flatten())
+                f2 = np.vstack(-f1[1], f1[0])
+            else: # QD east/north
+                apx = apexpy.Apex(self.epoch, refh = self.refh)
+                mlat, mlon = apx.geo2apex(grid.lat.flatten(), grid.lon.flatten(), self.refh)
+                f1, f2 = apx.basevectors_qd(grid.lat.flatten(), grid.lon.flatten(), self.refh)
 
-            f1 = f1 / np.linalg.norm(f1, axis=0)
-            Le = De * f1[0].reshape((-1, 1)) + Dn * f1[1].reshape((-1, 1))
-            Le = Le * self.lat_w(self.hemisphere * mlat).reshape((-1, 1))
+            f1 = (f1 / np.linalg.norm(f1, axis=0)).reshape((-1, 1))
+            f2 = (f2 / np.linalg.norm(f2, axis=0)).reshape((-1, 1))
 
-            f2 = f2 / np.linalg.norm(f2, axis=0)
-            Ln = De * f2[0].reshape((-1, 1)) + Dn * f2[1].reshape((-1, 1))
+            Le = (De * f1[0] + Dn * f1[1]) * self.lat_w(self.hemisphere * mlat)
+            Ln = (De * f2[0] + Dn * f2[1]) * self.lat_w(self.hemisphere * mlat)
+
 
         LTLe = Le.T.dot(Le)
         LTLn = Ln.T.dot(Ln)
