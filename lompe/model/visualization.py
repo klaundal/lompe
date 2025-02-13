@@ -31,18 +31,26 @@ rc('text', usetex=False)
 
 # Default arrow scales (all SI units):
 QUIVERSCALES = {'ground_mag':       600 * 1e-9 , # ground magnetic field scale [T]
-                'space_mag_fac':    600 * 1e-9 , # FAC magnetic field scale [T]
+                'space_mag_fac':    600 * 1e-9 , # FAC magnetic field scale [T]                
                 'convection':       2000       , # convection velocity scale [m/s]
                 'efield':           100  * 1e-3, # electric field scale [V/m]
                 'electric_current': 1000 * 1e-3, # electric surface current density [A/m] Ohm's law 
+                'ground_mag_DF':       1 * 1e-9 , # ground magnetic field scale [T]
+                'space_mag_fac_DF':    5 * 1e-9 , # FAC magnetic field scale [T]
+                'convection_DF':       5       , # convection velocity scale [m/s]
+                'efield_DF':           .5  * 1e-3, # electric field scale [V/m]
+                'electric_current_DF': 10 * 1e-3, # electric surface current density [A/m] Ohm's law 
                 'secs_current':     1000 * 1e-3, # electric surface current density [A/m] SECS 
                 'space_mag_full':   600 * 1e-9 } # FAC magnetic field scale [T]
 
 # Default color scales (SI units):
 COLORSCALES =  {'fac':        np.linspace(-1.95, 1.95, 40) * 1e-6 * 2,
                 'ground_mag': np.linspace(-980, 980, 50) * 1e-9 / 3, # upward component
+                'fac_DF':        np.linspace(-.02, .02, 40) * 1e-6 * 2,
+                'ground_mag_DF': np.linspace(-1, 1, 50) * 1e-9 / 3, # upward component
                 'hall':       np.linspace(0, 20, 32), # mho
                 'pedersen':   np.linspace(0, 20, 32)} # mho
+
 
 # Default color map:
 CMAP = plt.cm.magma
@@ -241,17 +249,16 @@ def plot_quiver(ax, model, dtype, scale = None, DF=False, **kwargs):
         kwargs['zorder'] = 3
 
     if scale == None:
-        kwargs['scale'] = QUIVERSCALES[dtype]
+        if DF is True:
+            kwargs['scale'] = QUIVERSCALES[dtype + '_DF']
+        else:
+            kwargs['scale'] = QUIVERSCALES[dtype]
     else:
         kwargs['scale'] = scale
 
     if 'scale_units' not in kwargs.keys():
         kwargs['scale_units'] = 'inches'
 
-    if DF:
-        func = getattr(model, funcs_DF[dtype])
-    else:
-        func = getattr(model, funcs[dtype])
     sh = np.array(model.grid_J.shape)
 
     # get function values on plotting grid:
@@ -262,11 +269,35 @@ def plot_quiver(ax, model, dtype, scale = None, DF=False, **kwargs):
     etamax = model.grid_J.eta.max() - model.grid_J.deta / 3
     xi, eta = np.meshgrid(np.linspace(ximin, ximax, sh[1]), np.linspace(etamin, etamax, sh[1]))
     lo, la = model.grid_J.projection.cube2geo(xi, eta)
-    A = func(lon = lo, lat = la)
-    if len(A) == 2:
-        Ae, An = A        
-    if len(A) == 3:
-        Ae, An, Au = A
+    
+    if DF is True:
+        func = getattr(model, funcs_DF[dtype])
+        A = func(lon = lo, lat = la)
+        if len(A) == 2:
+            Ae, An = A        
+        if len(A) == 3:
+            Ae, An, Au = A
+        
+    elif DF is False:
+        func = getattr(model, funcs[dtype])
+        A = func(lon = lo, lat = la)
+        if len(A) == 2:
+            Ae, An = A        
+        if len(A) == 3:
+            Ae, An, Au = A
+        
+    elif DF is None:
+        func = getattr(model, funcs_DF[dtype])
+        B = func(lon = lo, lat = la)
+        func = getattr(model, funcs[dtype])
+        C = func(lon = lo, lat = la)
+        A = []
+        for Bi, Ci in zip(B, C):
+            A.append(Bi + Ci)
+        if len(A) == 2:
+            Ae, An = A        
+        if len(A) == 3:
+            Ae, An, Au = A
     
     '''
     scale = 1
@@ -313,23 +344,45 @@ def plot_contour(ax, model, dtype, vertical = False, DF=False, **kwargs):
     kwargs: passed to contourf function
 
     """
-    if DF:
+    
+    if DF is None:
         func = getattr(model, funcs_DF[dtype])
-    else:
+        B = func()
         func = getattr(model, funcs[dtype])
-
-    A = func()
-    if len(A) not in [2, 3]: 
-        z = A # treat as scalar field
-    if len(A) == 2:
-        Ae, An= A[0], A[1]
-        z = np.sqrt(Ae**2 + An**2)
-    if len(A) == 3:
-        Ae, An, Au = A
-        if not vertical:
-            z = np.sqrt(Ae**2 + An**2)
+        C = func()
+        if len(B) not in [2, 3]:
+            z = B + C
         else:
-            z = Au
+            A = []
+            for Bi, Ci in zip(B, C):
+                A.append(Bi + Ci)
+            if len(A) == 2:
+                Ae, An= A[0], A[1]
+                z = np.sqrt(Ae**2 + An**2)
+            if len(A) == 3:
+                Ae, An, Au = A
+                if not vertical:
+                    z = np.sqrt(Ae**2 + An**2)
+                else:
+                    z = Au
+    else:
+        if DF is True:
+            func = getattr(model, funcs_DF[dtype])
+        else:
+            func = getattr(model, funcs[dtype])
+        A = func()
+        if len(A) not in [2, 3]:
+            z = A # treat as scalar field
+        if len(A) == 2:
+            Ae, An= A[0], A[1]
+            z = np.sqrt(Ae**2 + An**2)
+        if len(A) == 3:
+            Ae, An, Au = A
+            if not vertical:
+                z = np.sqrt(Ae**2 + An**2)
+            else:
+                z = Au
+
     if 'cmap' not in kwargs.keys():
         if vertical or dtype == 'fac':
             kwargs['cmap'] = plt.cm.bwr
@@ -337,7 +390,11 @@ def plot_contour(ax, model, dtype, vertical = False, DF=False, **kwargs):
             kwargs['cmap'] = CMAP
 
     if 'levels' not in kwargs.keys():
-        kwargs['levels'] = COLORSCALES[dtype]
+        if DF is True:
+            kwargs['levels'] = COLORSCALES[dtype + '_DF']
+        else:
+            kwargs['levels'] = COLORSCALES[dtype]
+        
 
 
     if 'zorder' not in kwargs.keys():
@@ -420,6 +477,7 @@ def plot_datasets(ax, model, dtype = 'convection', scale = None, **kwargs):
     ax.set_ylim(*ylim)
 
     return(qs)
+
 def plot_locations(ax, model, dtype='convection', **kwargs):
     dtype = dtype.lower()
 
@@ -475,7 +533,6 @@ def plot_potential(ax, model, **kwargs):
         kwargs['linewidths'] = 2
 
     return(ax.contour(model.grid_J.xi, model.grid_J.eta, V, **kwargs))
-
 
 def polarplot(ax, model, apex, time, dV = None, **clkw):
     """ plot grid and coastlines on mlt/mlat grid
@@ -537,7 +594,6 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
         levels = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
 
         pax.contour(lat, mlt, V, levels = levels, colors = 'C0', linewidths = 1, zorder = 3)
-
 
 def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
     """ plot SECS amplitudes
@@ -897,6 +953,256 @@ def lompeplot_DF(model, figheight = 9, include_data = False, show_data_location=
     cbarax2 = plt.subplot2grid((20, 40), (12, 32), rowspan = 1, colspan = 7)
 
     arrowax = plt.subplot2grid((20, 40), (19, 31), rowspan = 1, colspan = 8)
+
+    arrowax.set_axis_off()
+    arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')
+    arrowax.set_ylim(0, 1)
+    arrowax.set_xlim(0, 20)
+    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_full'] * 1e9 // 2, quiverscales['electric_current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top')
+
+    if time != None:
+        cbarax2.set_title(str(time) + ' UT', fontweight = 'bold')
+
+    fac_levels = colorscales['fac']
+    xx = np.vstack((fac_levels, fac_levels)) * 1e6
+    yy = np.vstack((np.zeros_like(fac_levels), np.ones_like(fac_levels)))
+    cbarax1.contourf(xx, yy, xx, cmap = plt.cm.bwr, levels = fac_levels * 1e6)
+    cbarax1.set_xlabel('$\mu$A/m$^2$')
+    cbarax1.set_yticks([])
+    buax = plt.twiny(cbarax1)
+    buax.set_xlim(colorscales['ground_mag'].min() *1e9, colorscales['ground_mag'].max() * 1e9)
+    buax.set_xlabel('nT')
+
+    conductance_levels = colorscales['hall']
+    xx = np.vstack((conductance_levels, conductance_levels)) 
+    yy = np.vstack((np.zeros_like(conductance_levels), np.ones_like(conductance_levels)))
+    cbarax2.contourf(xx, yy, xx, levels = conductance_levels, cmap = CMAP)
+    cbarax2.set_xlabel('mho')
+    cbarax2.set_yticks([])
+
+
+    # Finish
+    # ------
+    plt.subplots_adjust(top=0.91, bottom=0.065, left=0.01, right=0.99, hspace=0.1, wspace=0.02) 
+
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+    if return_axes==True:
+        return fig, axes, arrowax, [cbarax1, cbarax2]
+    else:
+        return fig
+
+def lompeplot_decomp(model, AiQ, figheight = 9, include_data = False, show_data_location= False, apex = None, time = None, 
+                     savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
+                     debug = False, return_axes = False):
+    """ produce a summary plot of lompe parameters. 
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        figheight: float, optional
+            figure height - the width is determined automatically based on aspect ratios,
+            and (width, height) is the figsize given to matplotlib.pyplot.figure
+        include_data: bool, optional
+            set to True if you want to also plot data. False (default) if not
+        show_data_location: bool, optional
+            will scatter the locations of data. The default is False and the locations
+            won't be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        time: datetime, optional
+            specify if you want magnetic local time
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        clkw: dictionary, optional
+            keywords for Polarplot.coastlines(), used to show coastlines in polarplot. Ignored 
+            if apex or time are not specified        
+        quiverscales: dict, optional
+            dictionary of scales (in inches) to use for quiver plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        colorscales: dict, optional
+            dictionary of colorscales to use in contour plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        degbug: bool, optional
+            set to True to show SECS currents and CF current amplitudes
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+
+    """
+
+    if quiverscales == None:
+        quiverscales = QUIVERSCALES
+    else:
+        QUIVERSCALES.update(quiverscales)
+        quiverscales = QUIVERSCALES
+
+    if colorscales == None:
+        colorscales = COLORSCALES
+    else:
+        COLORSCALES.update(colorscales)
+        colorscales = COLORSCALES
+
+    # Set up figures
+    # --------------
+    ar = model.grid_E.shape[1] / model.grid_E.shape[0] # aspect ratio
+    #figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+    figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+
+    fig = plt.figure(figsize = figsize)
+    axes = np.vstack(([plt.subplot2grid((33, 5), ( 0, j), rowspan = 10) for j in range(4)],
+                      [plt.subplot2grid((33, 5), (10, j), rowspan = 10) for j in range(4)],
+                      [plt.subplot2grid((33, 5), (20, j), rowspan = 10) for j in range(4)]))
+    ax_dbdt = plt.subplot2grid((33, 5), (10, 4), rowspan = 10)
+    ax_dbdt2 = plt.subplot2grid((33, 5), (0, 4), rowspan = 10)
+    ax_flat = axes.flatten().tolist()
+    ax_flat.append(ax_dbdt)
+    ax_flat.append(ax_dbdt2)
+    for ax in ax_flat:
+        format_ax(ax, model, apex = apex)
+
+    # E and Velocity (pot)
+    # --------
+    ax = axes[0, 0]
+    plot_quiver(ax, model, 'convection')
+    plot_potential(ax, model)
+    if show_data_location:
+        plot_locations(ax, model, 'convection')
+    if include_data:
+        plot_datasets(ax, model, 'convection')
+    ax.set_title('Epot and Vpot')
+
+    # SH and Velocity (ind)
+    # --------
+    ax = axes[1, 0]
+    plot_contour(ax, model, 'hall')
+    plot_quiver(ax, model, 'efield', DF=True, color='tab:green')
+    plot_coastlines(ax, model, color = 'grey')
+    if time != None and apex != None:
+        plot_mlt(ax, model, time, apex, color = 'grey')
+    ax.set_title('Hall and Eind')
+
+    # SP and Velocity (ind)
+    # --------
+    ax = axes[2, 0]
+    plot_contour(ax, model, 'pedersen')
+    plot_quiver(ax, model, 'convection', DF=True, color='tab:green')
+    plot_coastlines(ax, model, color = 'grey')
+    if time != None and apex != None:
+        plot_mlt(ax, model, time, apex, color = 'grey')
+    ax.set_title('Pedersen and Vind')
+    
+    # Space magnetic field (Epot)
+    # --------------------
+    ax = axes[0, 1]
+    plot_quiver(  ax, model, 'space_mag_fac')
+    plot_contour( ax, model, 'fac')
+    if show_data_location:
+        plot_locations(ax, model, 'space_mag_fac')
+        plot_locations(ax, model, 'fac')
+
+    if include_data:
+        plot_datasets(ax, model, 'space_mag_fac')
+        plot_datasets(ax, model, 'space_mag_full')
+    ax.set_title('FAC and B (pot)')
+
+    # Space magnetic field (Eind)
+    # --------------------
+    ax = axes[1, 1]
+    plot_quiver(  ax, model, 'space_mag_fac', DF=True)
+    plot_contour( ax, model, 'fac', DF=True)
+    ax.set_title('FAC and B (ind)')
+    
+    # Space magnetic field (Total)
+    # --------------------
+    ax = axes[2, 1]
+    plot_quiver(  ax, model, 'space_mag_fac', DF=None)
+    plot_contour( ax, model, 'fac', DF=None)
+    ax.set_title('FAC and B')
+
+    # Current densities (Epot)
+    # -----------------
+    ax = axes[0, 2]
+    plot_quiver(ax, model, 'electric_current')
+    ax.set_title('Jpot')
+    if debug:
+        plot_SECS_amplitudes(ax, model, curl_free = True)
+        plot_quiver(ax, model, 'SECS_current', color = 'C2')
+    
+    # Current densities (Eind)
+    # -----------------
+    ax = axes[1, 2]
+    plot_quiver(ax, model, 'electric_current', DF=True)
+    ax.set_title('Jind')
+    
+    # Current densities
+    # -----------------
+    ax = axes[2, 2]
+    plot_quiver(ax, model, 'electric_current' , DF=None)
+    ax.set_title('J')
+    
+    # Ground magnetic field
+    # ---------------------
+    ax = axes[0, 3]
+    plot_quiver(  ax, model, 'ground_mag',)
+    plot_contour( ax, model, 'ground_mag', vertical = True)
+    if show_data_location:
+        plot_locations(ax, model, 'ground_mag')
+    if include_data:
+        plot_datasets(ax, model, 'ground_mag')
+    ax.set_title('Bg (pot)')
+    
+    # Ground magnetic field
+    # ---------------------
+    ax = axes[1, 3]
+    plot_quiver(  ax, model, 'ground_mag', DF=True)
+    plot_contour( ax, model, 'ground_mag', vertical = True, DF=True)
+    ax.set_title('Bg (ind)')
+    
+    # Ground magnetic field
+    # ---------------------
+    ax = axes[2, 3]
+    plot_quiver(  ax, model, 'ground_mag', DF=None)
+    plot_contour( ax, model, 'ground_mag', vertical = True, DF=None)
+    ax.set_title('Bg')
+
+    z = AiQ.dot(model.m_ind)
+    if z.size == model.grid_J.xi.size:
+        xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
+    else:
+        xi, eta, z = model.grid_E.xi, model.grid_E.eta, z.reshape(model.grid_E.shape)
+    ax_dbdt.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-100, 100, 40)*1e-9)
+    ax_dbdt.set_title('dBr/dt (ind)')
+
+    Gu = model._B_df_matrix(r=model.R)
+    Gu = Gu[2*int(Gu.shape[0]/3):, :]
+    z = Gu.dot(model.m) - Gu.dot(model.m_old)
+    if z.size == model.grid_J.xi.size:
+        xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
+    else:
+        xi, eta, z = model.grid_E.xi, model.grid_E.eta, z.reshape(model.grid_E.shape)
+    ax_dbdt2.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-100, 100, 40)*1e-9)
+    ax_dbdt2.set_title('dBr/dt (pot)')
+
+    
+    # Polarplot
+    # ---------
+    if time != None and apex != None:
+        ax = plt.subplot2grid((33, 5), (20, 4), rowspan = 10) 
+        polarplot(ax, model, apex, time, dV = 5, **clkw)
+    
+
+    # Make scales
+    #------------
+    cbarax1 = plt.subplot2grid((33, 60), (32, 43), rowspan = 1, colspan = 10)
+    cbarax2 = plt.subplot2grid((33, 60), (32, 8), rowspan = 1, colspan = 10)
+
+    arrowax = plt.subplot2grid((33, 60), (32, 24), rowspan = 1, colspan = 10)
 
     arrowax.set_axis_off()
     arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')

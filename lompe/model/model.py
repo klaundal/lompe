@@ -208,6 +208,7 @@ class Emodel(object):
             the previous conductance model is kept
         """
         self.m = None # clear electric field model parameters
+        self.m_ind = None
 
         # dictionary of lists to store datasets in
         self.data = {'efield':[], 'convection':[], 'ground_mag':[], 'space_mag_full':[], 'space_mag_fac':[], 'fac':[]}
@@ -865,11 +866,11 @@ class Emodel(object):
             Northward components of the electric field [V/m]. Same shape as lon / lat
         """
 
-        if self.m is None:
+        if self.m_ind is None:
             raise Exception('Model vector not defined yet. Add data and call run_inversion()')
 
         Ee, En, shape = self._E_matrix_DF(lon, lat, return_shape = True)
-        return Ee.dot(self.m).reshape(shape), En.dot(self.m).reshape(shape)
+        return Ee.dot(self.m_ind).reshape(shape), En.dot(self.m_ind).reshape(shape)
 
     @extrapolation_check
     def E(self, lon = None, lat = None):
@@ -1022,11 +1023,11 @@ class Emodel(object):
             Northward components of the convection velocity [m/s]. Same shape as lon / lat
         """
 
-        if self.m is None:
+        if self.m_ind is None:
             raise Exception('Model vector not defined yet. Add data and call run_inversion()')
 
         Ve, Vn, shape = self._v_matrix_DF(lon, lat, return_shape = True)
-        return Ve.dot(self.m).reshape(shape), Vn.dot(self.m).reshape(shape)
+        return Ve.dot(self.m_ind).reshape(shape), Vn.dot(self.m_ind).reshape(shape)
 
     # MAGNETIC FIELDS
     @check_input
@@ -1101,7 +1102,7 @@ class Emodel(object):
             - self.De.dot(SH) * Ee_DF * self.hemisphere
 
         if return_poles:
-            return self.QiA.dot(c).dot(self.m)
+            return self.QiA.dot(c).dot(self.m_ind)
         else:
             return HQiA.dot(c)        
 
@@ -1177,7 +1178,7 @@ class Emodel(object):
             + self.De.dot(SP) * Ee_DF + self.Dn.dot(SP) * En_DF
 
         if return_poles: # return SECS poles
-            return self.QiA.dot(d).dot(self.m)
+            return self.QiA.dot(d).dot(self.m_ind)
         else:
             return HQiA.dot(d)
 
@@ -1277,11 +1278,11 @@ class Emodel(object):
 
         """
 
-        if self.m is None:
+        if self.m_ind is None:
             raise Exception('Model vector not defined yet. Add data and call run_inversion()')
 
         BBB, shape = self._B_df_matrix_DF(lon, lat, r, return_shape = True)
-        Be, Bn, Bu = np.split(np.ravel(BBB.dot(self.m)), 3)
+        Be, Bn, Bu = np.split(np.ravel(BBB.dot(self.m_ind)), 3)
 
         return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
 
@@ -1315,18 +1316,18 @@ class Emodel(object):
             Upward components of the space magnetic field perturbation [T]. Same shape as lon / lat
         """
 
-        if self.m is None:
+        if self.m_ind is None:
             raise Exception('Model vector not defined yet. Add data and call run_inversion()')
 
         # handle default r:
         if r is None: r = self.R * 2 - RE
 
         BBB, shape = self._B_cf_matrix_DF(lon, lat, r, return_shape = True)
-        Be, Bn, Bu = np.split(np.ravel(BBB.dot(self.m)), 3)
+        Be, Bn, Bu = np.split(np.ravel(BBB.dot(self.m_ind)), 3)
 
         if include_df:
             BBB = self._B_df_matrix_DF(lon, lat, r, return_shape = False)
-            Be_df, Bn_df, Bu_df = np.split(np.ravel(BBB.dot(self.m)), 3)
+            Be_df, Bn_df, Bu_df = np.split(np.ravel(BBB.dot(self.m_ind)), 3)
             Be, Bn, Bu = Be + Be_df, Bn + Bn_df, Bu + Bu_df
 
         return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
