@@ -904,7 +904,7 @@ class Emodel(object):
 
 
     @check_input
-    def E_pot(self, lon = None, lat = None):
+    def E_pot(self, lon = None, lat = None, current_type='potential'):
         """
         Calculate electric potential
 
@@ -931,11 +931,14 @@ class Emodel(object):
             raise Exception('Model vector not defined yet. Add data and call run_inversion()')
 
         G = get_SECS_J_G_matrices(lat, lon, self.lat_E, self.lon_E,
-                                  current_type = 'potential',
+                                  current_type = current_type,
                                   RI = self.R,
                                   singularity_limit = self.secs_singularity_limit)
 
-        return G.dot(self.m)
+        if current_type == 'potential':
+            return G.dot(self.m)
+        else:
+            return G.dot(self.m_ind)
 
 
     # CONVECTION VELOCITY
@@ -1498,7 +1501,7 @@ class Emodel(object):
 
     # CURRENTS
     @check_input
-    def j(self, lon = None, lat = None):
+    def j(self, lon = None, lat = None, decomp=False):
         """
         Calculate the horizontal ionospheric surface current density
 
@@ -1533,15 +1536,20 @@ class Emodel(object):
 
         # electric field:
         Ee, En = self.E(lon, lat)
-
-        je = Ee * SP + SH * En * self.hemisphere
-        jn = En * SP - SH * Ee * self.hemisphere
-
-        return je.reshape(shape), jn.reshape(shape)
+        
+        jeH =   SH * En * self.hemisphere
+        jnH = - SH * Ee * self.hemisphere        
+        jeP = Ee * SP
+        jnP = En * SP
+        
+        if not decomp:
+            return (jeH+jeP).reshape(shape), (jnH+jnP).reshape(shape)
+        else: 
+            return jeH.reshape(shape), jnH.reshape(shape), jeP.reshape(shape), jnP.reshape(shape)
 
     # CURRENTS
     @check_input
-    def j_DF(self, lon = None, lat = None):
+    def j_DF(self, lon = None, lat = None, decomp=False):
         """
         Calculate the horizontal ionospheric surface current density
 
@@ -1577,10 +1585,14 @@ class Emodel(object):
         # electric field:
         Ee, En = self.E_DF(lon, lat)
 
-        je = Ee * SP + SH * En * self.hemisphere
-        jn = En * SP - SH * Ee * self.hemisphere
-
-        return je.reshape(shape), jn.reshape(shape)
+        jeH =   SH * En * self.hemisphere
+        jnH = - SH * Ee * self.hemisphere
+        jeP = Ee * SP
+        jnP = En * SP
+        if not decomp:
+            return (jeH+jeP).reshape(shape), (jnH+jnP).reshape(shape)
+        else: 
+            return jeH.reshape(shape), jnH.reshape(shape), jeP.reshape(shape), jnP.reshape(shape)
 
     @check_input
     def FAC(self, lon = None, lat = None):

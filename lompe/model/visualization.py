@@ -223,7 +223,7 @@ def format_ax(ax, model, apex = None, **kwargs):
 
 #####################
 # PLOTTING FUNCTIONS 
-def plot_quiver(ax, model, dtype, scale = None, DF=False, **kwargs):
+def plot_quiver(ax, model, dtype, scale = None, DF=False, hall=True, ped=True, **kwargs):
     """ quiver plot of dtype on uniform grid
     
     parameters
@@ -270,9 +270,18 @@ def plot_quiver(ax, model, dtype, scale = None, DF=False, **kwargs):
     xi, eta = np.meshgrid(np.linspace(ximin, ximax, sh[1]), np.linspace(etamin, etamax, sh[1]))
     lo, la = model.grid_J.projection.cube2geo(xi, eta)
     
+    stuff = {'lon':lo, 'lat':la}
+    if dtype == 'electric_current':
+        stuff['hall'] = False
+        stuff['ped'] = False
+        if hall:
+            stuff['hall'] = True
+        if ped:
+            stuff['ped'] = True
+    
     if DF is True:
         func = getattr(model, funcs_DF[dtype])
-        A = func(lon = lo, lat = la)
+        A = func(stuff)
         if len(A) == 2:
             Ae, An = A        
         if len(A) == 3:
@@ -280,17 +289,17 @@ def plot_quiver(ax, model, dtype, scale = None, DF=False, **kwargs):
         
     elif DF is False:
         func = getattr(model, funcs[dtype])
-        A = func(lon = lo, lat = la)
+        A = func(stuff)
         if len(A) == 2:
             Ae, An = A        
         if len(A) == 3:
             Ae, An, Au = A
         
     elif DF is None:
-        func = getattr(model, funcs_DF[dtype])
-        B = func(lon = lo, lat = la)
+        func = getattr(model, funcs_DF[dtype])        
+        B = func(stuff)
         func = getattr(model, funcs[dtype])
-        C = func(lon = lo, lat = la)
+        C = func(stuff)
         A = []
         for Bi, Ci in zip(B, C):
             A.append(Bi + Ci)
@@ -503,7 +512,7 @@ def plot_locations(ax, model, dtype='convection', **kwargs):
     ax.set_ylim(*ylim)
     return(scat)
 
-def plot_potential(ax, model, **kwargs):
+def plot_potential(ax, model, DF=False, **kwargs):
     """ plot electric potential on axis 
 
     parameters
@@ -516,8 +525,10 @@ def plot_potential(ax, model, **kwargs):
         default contour interval is set to 5 kV. Change by specifying
         a different 'levels' value.
     """
-    
-    V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
+    if DF:
+        V = model.E_pot(current_type='stream').reshape(model.grid_J.shape) * 1e-3
+    else:
+        V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
     V = V - V.min() - (V.max() - V.min())/2
 
     '''
@@ -526,6 +537,8 @@ def plot_potential(ax, model, **kwargs):
 
     if 'levels' not in kwargs.keys():
         dV = 5 # contour level step size in kV
+        if DF:
+            dV = 1
         kwargs['levels'] = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
     if 'colors' not in kwargs.keys():
         kwargs['colors'] = 'C0'
@@ -1176,7 +1189,7 @@ def lompeplot_decomp(model, AiQ, figheight = 9, include_data = False, show_data_
         xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
     else:
         xi, eta, z = model.grid_E.xi, model.grid_E.eta, z.reshape(model.grid_E.shape)
-    ax_dbdt.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-100, 100, 40)*1e-9)
+    ax_dbdt.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-800, 800, 40)*1e-9)
     ax_dbdt.set_title('dBr/dt (ind)')
 
     Gu = model._B_df_matrix(r=model.R)
@@ -1186,7 +1199,7 @@ def lompeplot_decomp(model, AiQ, figheight = 9, include_data = False, show_data_
         xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
     else:
         xi, eta, z = model.grid_E.xi, model.grid_E.eta, z.reshape(model.grid_E.shape)
-    ax_dbdt2.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-100, 100, 40)*1e-9)
+    ax_dbdt2.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-800, 800, 40)*1e-9)
     ax_dbdt2.set_title('dBr/dt (pot)')
 
     
@@ -1231,6 +1244,676 @@ def lompeplot_decomp(model, AiQ, figheight = 9, include_data = False, show_data_
     cbarax2.set_yticks([])
 
 
+    # Finish
+    # ------
+    plt.subplots_adjust(top=0.91, bottom=0.065, left=0.01, right=0.99, hspace=0.1, wspace=0.02) 
+
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+    if return_axes==True:
+        return fig, axes, arrowax, [cbarax1, cbarax2]
+    else:
+        return fig
+
+def lompeplot_decomp_2(model, AiQ, figheight = 14, include_data = False, show_data_location= False, apex = None, time = None, 
+                     savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
+                     debug = False, return_axes = False):
+    """ produce a summary plot of lompe parameters. 
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        figheight: float, optional
+            figure height - the width is determined automatically based on aspect ratios,
+            and (width, height) is the figsize given to matplotlib.pyplot.figure
+        include_data: bool, optional
+            set to True if you want to also plot data. False (default) if not
+        show_data_location: bool, optional
+            will scatter the locations of data. The default is False and the locations
+            won't be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        time: datetime, optional
+            specify if you want magnetic local time
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        clkw: dictionary, optional
+            keywords for Polarplot.coastlines(), used to show coastlines in polarplot. Ignored 
+            if apex or time are not specified        
+        quiverscales: dict, optional
+            dictionary of scales (in inches) to use for quiver plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        colorscales: dict, optional
+            dictionary of colorscales to use in contour plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        degbug: bool, optional
+            set to True to show SECS currents and CF current amplitudes
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+
+    """
+
+    if quiverscales == None:
+        quiverscales = QUIVERSCALES
+    else:
+        QUIVERSCALES.update(quiverscales)
+        quiverscales = QUIVERSCALES
+
+    if colorscales == None:
+        colorscales = COLORSCALES
+    else:
+        COLORSCALES.update(colorscales)
+        colorscales = COLORSCALES
+
+    # Set up figures
+    # --------------
+    ar = model.grid_E.shape[1] / model.grid_E.shape[0] # aspect ratio
+    #figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+    figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+
+    fig = plt.figure(figsize = figsize)
+    axes = np.vstack(([plt.subplot2grid((33, 6), ( 0, j), rowspan = 10) for j in range(4)],
+                      [plt.subplot2grid((33, 6), (10, j), rowspan = 10) for j in range(4)],
+                      [plt.subplot2grid((33, 6), (20, j), rowspan = 10) for j in range(4)]))
+    ax_dbdt = plt.subplot2grid((33, 6), (10, 4), rowspan = 10)
+    ax_dbdt2 = plt.subplot2grid((33, 6), (0, 4), rowspan = 10)
+    ax_flat = axes.flatten().tolist()
+    ax_flat.append(ax_dbdt)
+    ax_flat.append(ax_dbdt2)
+    
+    ax_j1 = plt.subplot2grid((33, 6), ( 0, 5), rowspan = 10)
+    ax_j2 = plt.subplot2grid((33, 6), (10, 5), rowspan = 10)
+    ax_j3 = plt.subplot2grid((33, 6), (20, 5), rowspan = 10)
+    
+    ax_flat.append(ax_j1)
+    ax_flat.append(ax_j2)
+    ax_flat.append(ax_j3)
+    
+    for ax in ax_flat:
+        format_ax(ax, model, apex = apex)
+
+
+    # E and Velocity (pot)
+    # --------
+    ax = axes[0, 0]
+    plot_quiver(ax, model, 'convection')
+    plot_potential(ax, model)
+    plot_potential(ax, model, DF='True', colors='tab:orange')
+    if show_data_location:
+        plot_locations(ax, model, 'convection')
+    if include_data:
+        plot_datasets(ax, model, 'convection')
+    ax.set_title('Epot and Vpot')
+
+    # SH and Velocity (ind)
+    # --------
+    ax = axes[1, 0]
+    plot_contour(ax, model, 'hall')
+    plot_quiver(ax, model, 'efield', DF=True, color='tab:green')
+    plot_coastlines(ax, model, color = 'grey')
+    if time != None and apex != None:
+        plot_mlt(ax, model, time, apex, color = 'grey')
+    ax.set_title('Hall and Eind')
+
+    # SP and Velocity (ind)
+    # --------
+    ax = axes[2, 0]
+    plot_contour(ax, model, 'pedersen')
+    plot_quiver(ax, model, 'convection', DF=True, color='tab:green')
+    plot_coastlines(ax, model, color = 'grey')
+    if time != None and apex != None:
+        plot_mlt(ax, model, time, apex, color = 'grey')
+    ax.set_title('Pedersen and Vind')
+    
+    # Space magnetic field (Epot)
+    # --------------------
+    ax = axes[0, 1]
+    plot_quiver(  ax, model, 'space_mag_fac')
+    plot_contour( ax, model, 'fac')
+    if show_data_location:
+        plot_locations(ax, model, 'space_mag_fac')
+        plot_locations(ax, model, 'fac')
+
+    if include_data:
+        plot_datasets(ax, model, 'space_mag_fac')
+        plot_datasets(ax, model, 'space_mag_full')
+    ax.set_title('FAC and B (pot)')
+
+    # Space magnetic field (Eind)
+    # --------------------
+    ax = axes[1, 1]
+    plot_quiver(  ax, model, 'space_mag_fac', DF=True)
+    plot_contour( ax, model, 'fac', DF=True)
+    ax.set_title('FAC and B (ind)')
+    
+    # Space magnetic field (Total)
+    # --------------------
+    ax = axes[2, 1]
+    plot_quiver(  ax, model, 'space_mag_fac', DF=None)
+    plot_contour( ax, model, 'fac', DF=None)
+    ax.set_title('FAC and B')
+
+    # Current densities (Epot)
+    # -----------------
+    ax = axes[0, 2]
+    plot_quiver(ax, model, 'electric_current')
+    ax.set_title('Jpot')
+    if debug:
+        plot_SECS_amplitudes(ax, model, curl_free = True)
+        plot_quiver(ax, model, 'SECS_current', color = 'C2')
+    
+    # Current densities (Eind)
+    # -----------------
+    ax = axes[1, 2]
+    plot_quiver(ax, model, 'electric_current', DF=True)
+    ax.set_title('Jind')
+    
+    # Current densities
+    # -----------------
+    ax = axes[2, 2]
+    plot_quiver(ax, model, 'electric_current' , DF=None)
+    ax.set_title('J')
+    
+    # Ground magnetic field
+    # ---------------------
+    ax = axes[0, 3]
+    plot_quiver(  ax, model, 'ground_mag',)
+    plot_contour( ax, model, 'ground_mag', vertical = True)
+    if show_data_location:
+        plot_locations(ax, model, 'ground_mag')
+    if include_data:
+        plot_datasets(ax, model, 'ground_mag')
+    ax.set_title('Bg (pot)')
+    
+    # Ground magnetic field
+    # ---------------------
+    ax = axes[1, 3]
+    plot_quiver(  ax, model, 'ground_mag', DF=True)
+    plot_contour( ax, model, 'ground_mag', vertical = True, DF=True)
+    ax.set_title('Bg (ind)')
+    
+    # Ground magnetic field
+    # ---------------------
+    ax = axes[2, 3]
+    plot_quiver(  ax, model, 'ground_mag', DF=None)
+    plot_contour( ax, model, 'ground_mag', vertical = True, DF=None)
+    ax.set_title('Bg')
+
+    z = AiQ.dot(model.m_ind)
+    if z.size == model.grid_J.xi.size:
+        xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
+    else:
+        xi, eta, z = model.grid_E.xi, model.grid_E.eta, z.reshape(model.grid_E.shape)
+    ax_dbdt.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-800, 800, 40)*1e-9)
+    ax_dbdt.set_title('dBr/dt (ind)')
+
+    Gu = model._B_df_matrix(r=model.R)
+    Gu = Gu[2*int(Gu.shape[0]/3):, :]
+    z = Gu.dot(model.m) - Gu.dot(model.m_old)
+    if z.size == model.grid_J.xi.size:
+        xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
+    else:
+        xi, eta, z = model.grid_E.xi, model.grid_E.eta, z.reshape(model.grid_E.shape)
+    ax_dbdt2.contourf(xi, eta, z, cmap='bwr', levels=np.linspace(-800, 800, 40)*1e-9)
+    ax_dbdt2.set_title('dBr/dt (pot)')
+    
+    SP = model.pedersen_conductance().flatten()
+    EeCF, EnCF = model.E()
+    EeDF, EnDF = model.E_DF()
+    # Joule
+    J1 = SP*(EeCF**2 + EnCF**2)
+    J2 = 2*SP*(EeCF*EeDF + EnCF*EnDF)
+    J1 = J1.reshape(model.grid_J.shape)
+    J2 = J2.reshape(model.grid_J.shape)
+    J3 = J1 + J2
+    
+    ax_j1.contourf(model.grid_J.xi, model.grid_J.eta, J1, cmap='Purples', levels=np.linspace(0, .1, 40))
+    ax_j2.contourf(model.grid_J.xi, model.grid_J.eta, J2, cmap='PuOr',  levels=np.linspace(-.1, .1, 40)/20)
+    ax_j3.contourf(model.grid_J.xi, model.grid_J.eta, J3, cmap='Purples', levels=np.linspace(0, .1, 40))
+    ax_j1.set_title('Joule Epot')
+    ax_j2.set_title('Joule ind')
+    ax_j3.set_title('Joule')
+    
+    
+    # Polarplot
+    # ---------
+    if time != None and apex != None:
+        ax = plt.subplot2grid((33, 6), (20, 4), rowspan = 10) 
+        polarplot(ax, model, apex, time, dV = 5, **clkw)
+    
+
+    # Make scales
+    #------------
+    cbarax1 = plt.subplot2grid((33, 60), (32, 43), rowspan = 1, colspan = 10)
+    cbarax2 = plt.subplot2grid((33, 60), (32, 8), rowspan = 1, colspan = 10)
+
+    arrowax = plt.subplot2grid((33, 60), (32, 24), rowspan = 1, colspan = 10)
+
+    arrowax.set_axis_off()
+    arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')
+    arrowax.set_ylim(0, 1)
+    arrowax.set_xlim(0, 20)
+    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_full'] * 1e9 // 2, quiverscales['electric_current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top')
+
+    if time != None:
+        cbarax2.set_title(str(time) + ' UT', fontweight = 'bold')
+
+    fac_levels = colorscales['fac']
+    xx = np.vstack((fac_levels, fac_levels)) * 1e6
+    yy = np.vstack((np.zeros_like(fac_levels), np.ones_like(fac_levels)))
+    cbarax1.contourf(xx, yy, xx, cmap = plt.cm.bwr, levels = fac_levels * 1e6)
+    cbarax1.set_xlabel('$\mu$A/m$^2$')
+    cbarax1.set_yticks([])
+    buax = plt.twiny(cbarax1)
+    buax.set_xlim(colorscales['ground_mag'].min() *1e9, colorscales['ground_mag'].max() * 1e9)
+    buax.set_xlabel('nT')
+
+    conductance_levels = colorscales['hall']
+    xx = np.vstack((conductance_levels, conductance_levels)) 
+    yy = np.vstack((np.zeros_like(conductance_levels), np.ones_like(conductance_levels)))
+    cbarax2.contourf(xx, yy, xx, levels = conductance_levels, cmap = CMAP)
+    cbarax2.set_xlabel('mho')
+    cbarax2.set_yticks([])
+
+
+    # Finish
+    # ------
+    plt.subplots_adjust(top=0.91, bottom=0.065, left=0.01, right=0.99, hspace=0.1, wspace=0.02) 
+
+    if savekw != None:
+        plt.savefig(**savekw)
+    else:
+        plt.show()
+    if return_axes==True:
+        return fig, axes, arrowax, [cbarax1, cbarax2]
+    else:
+        return fig
+
+def lompeplot_decomp_3(model, AiQ, figheight = 18, include_data = False, show_data_location= False, apex = None, time = None, 
+                     savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
+                     debug = False, return_axes = False):
+    """ produce a summary plot of lompe parameters. 
+
+        The output is either a figure displayed on screen or, if savekw is given, a figure saved to disk
+
+        parameters
+        ----------
+        model: lompe.model
+            model that will be plotted
+        figheight: float, optional
+            figure height - the width is determined automatically based on aspect ratios,
+            and (width, height) is the figsize given to matplotlib.pyplot.figure
+        include_data: bool, optional
+            set to True if you want to also plot data. False (default) if not
+        show_data_location: bool, optional
+            will scatter the locations of data. The default is False and the locations
+            won't be plotted
+        apex: apexpy.Apex object, optional
+            specify if you want magnetic coordinate grid instead of geographic
+        time: datetime, optional
+            specify if you want magnetic local time
+        savekw: dictionary, optional
+            keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
+        clkw: dictionary, optional
+            keywords for Polarplot.coastlines(), used to show coastlines in polarplot. Ignored 
+            if apex or time are not specified        
+        quiverscales: dict, optional
+            dictionary of scales (in inches) to use for quiver plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        colorscales: dict, optional
+            dictionary of colorscales to use in contour plots. keys must be valid datatype. 
+            default values are used for datatypes that are not in list of keys
+        degbug: bool, optional
+            set to True to show SECS currents and CF current amplitudes
+        return_axes: bool, optional
+            Set to True to return the matplotlib figure and axes objects.
+            Default is False and will only return the matplotlib figure object
+
+    """
+
+    if quiverscales == None:
+        quiverscales = QUIVERSCALES
+    else:
+        QUIVERSCALES.update(quiverscales)
+        quiverscales = QUIVERSCALES
+
+    if colorscales == None:
+        colorscales = COLORSCALES
+    else:
+        COLORSCALES.update(colorscales)
+        colorscales = COLORSCALES
+
+    # Calculate everything
+    # --------------
+    
+    # get function values on plotting grid:
+    NN = 12
+    sh = np.array(model.grid_J.shape)
+    sh = sh // sh.min() * NN 
+    ximin  = model.grid_J.xi .min() + model.grid_J.dxi  / 3
+    ximax  = model.grid_J.xi .max() - model.grid_J.dxi  / 3
+    etamin = model.grid_J.eta.min() + model.grid_J.deta / 3
+    etamax = model.grid_J.eta.max() - model.grid_J.deta / 3
+    qxi, qeta = np.meshgrid(np.linspace(ximin, ximax, sh[1]), np.linspace(etamin, etamax, sh[1]))
+    qlo, qla = model.grid_J.projection.cube2geo(qxi, qeta)
+    
+    xi, eta             = model.grid_J.xi,  model.grid_J.eta
+    lat, lon            = model.grid_J.lat, model.grid_J.lon
+    xi_mesh, eta_mesh   = model.grid_E.xi,  model.grid_E.eta
+    lat_mesh, lon_mesh  = model.grid_E.lat, model.grid_E.lon
+    
+    # Potential and stream function
+    V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
+    W = model.E_pot(current_type='stream').reshape(model.grid_J.shape) * 1e-3
+    
+    # Convection and compression
+    veCF, vnCF = model.v(lon=qlo, lat=qla)
+    veDF, vnDF = model.v_DF(lon=qlo, lat=qla)
+    ve, vn = veCF + veDF, vnCF + vnDF
+
+    # FAC
+    FACCF = model.FAC()
+    FACDF = model.FAC_DF()
+    FAC = FACCF + FACDF
+    
+    # B space
+    BseCF, BsnCF, _ = model.B_space(lon=qlo, lat=qla)
+    BseDF, BsnDF, _ = model.B_space_DF(lon=qlo, lat=qla)
+    Bse, Bsn = BseCF+BseDF, BsnCF+BsnDF
+    
+    # Electric currents
+    jeCFH, jnCFH, jeCFP, jnCFP = model.j(lon=qlo, lat=qla, decomp=True)
+    jeCF = jeCFH + jeCFP
+    jnCF = jnCFH + jnCFP
+        
+    jeDFH, jnDFH, jeDFP, jnDFP = model.j_DF(lon=qlo, lat=qla, decomp=True)
+    jeDF = jeDFH + jeDFP
+    jnDF = jnDFH + jnDFP
+    
+    jeH = jeCFH + jeDFH
+    jnH = jnCFH + jnDFH
+    jeP = jeCFP + jeDFP
+    jnP = jnCFP + jnDFP
+    
+    je = jeH + jeP
+    jn = jnH + jnP
+
+    # Conductance
+    SH = model.hall_conductance()
+    SP = model.pedersen_conductance()
+    
+    # Electric field
+    EeCF, EnCF = model.E()
+    EeDF, EnDF = model.E_DF()
+    EeCF, EnCF = EeCF.reshape(SH.shape), EnCF.reshape(SH.shape)
+    EeDF, EnDF = EeDF.reshape(SH.shape), EnDF.reshape(SH.shape)
+
+    # Joule
+    JouleCF = SP*(EeCF**2 + EnCF**2)
+    JouleDF = 2*SP*(EeCF*EeDF + EnCF*EnDF) + SP*(EeDF**2 + EnDF**2)
+    Joule = JouleCF + JouleDF
+
+    # dBr/dt at ionosphere
+    dBrdt = AiQ.dot(model.m_ind).reshape(model.grid_E.shape)
+    
+    # Bg
+    _, _, BuCF = model.B_ground()
+    _, _, BuDF = model.B_ground_DF()
+    Bu = BuCF+BuDF
+    
+    BeCF, BnCF, _ = model.B_ground(qlo, qla)
+    BeDF, BnDF, _ = model.B_ground_DF(qlo, qla)
+    Be, Bn = BeCF+BeDF, BnCF+BnDF
+    
+    # Set up figures
+    # --------------
+    ar = model.grid_E.shape[1] / model.grid_E.shape[0] # aspect ratio
+    figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+
+    fig = plt.figure(figsize = figsize)
+    axes = np.vstack(([plt.subplot2grid((36, 6), ( 0, j), rowspan = 10) for j in range(6)],
+                      [plt.subplot2grid((36, 6), (11, j), rowspan = 10) for j in range(6)],
+                      [plt.subplot2grid((36, 6), (22, j), rowspan = 10) for j in range(6)]))
+    
+    
+    ax_flat = axes.flatten().tolist()
+    ax_flat.pop(12) # Remove polar plot
+    for ax in ax_flat:
+        format_ax(ax, model, apex = apex)
+
+    # V and vpot and v
+    # ---------
+    ax = axes[0, 0]
+    V = V - V.min() - (V.max() - V.min())/2
+    dV = 5
+    ax.contour(xi, eta, V, colors='tab:blue', levels=np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV])    
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(veCF, vnCF, qlo, qla)    
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['convection']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(ve, vn, qlo, qla)
+    kwargs = {'color':'tab:red', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['convection']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('Phi, V (pot) + V')
+    # W
+    # ---------
+    ax = axes[1, 0]
+    V = W - W.min() - (W.max() - W.min())/2
+    dV = 1
+    ax.contour(xi, eta, V, colors='tab:orange', levels=np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV])    
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(veDF, vnDF, qlo, qla)    
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['convection_DF']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('W, V (ind)')    
+    # Polarplot
+    # ---------
+    polarplot(axes[2, 0], model, apex, time, dV = 5, **clkw)
+    
+    
+    # Space magnetic field (pot)
+    # --------------------
+    ax = axes[0, 1]
+    ax.contourf(xi, eta, FACCF.reshape(model.grid_J.shape), cmap='bwr', levels=colorscales['fac'])
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(BseCF, BsnCF, qlo, qla)    
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['space_mag_fac']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('FAC, B (pot)')    
+    # Space magnetic field (ind)
+    # --------------------
+    ax = axes[1, 1]
+    ax.contourf(xi, eta, FACDF.reshape(model.grid_J.shape), cmap='bwr', levels=colorscales['fac_DF'])
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(BseDF, BsnDF, qlo, qla)
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['space_mag_fac_DF']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('FAC, B (ind)')    
+    # Space magnetic field (pot)
+    # --------------------
+    ax = axes[2, 1]
+    ax.contourf(xi, eta, FAC.reshape(model.grid_J.shape), cmap='bwr', levels=colorscales['fac'])
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(Bse, Bsn, qlo, qla)    
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['space_mag_fac']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('FAC, B')
+    
+    
+    # Current densities (pot)
+    # -----------------
+    ax = axes[0, 2]
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeCFH, jnCFH, qlo, qla)    
+    kwargs = {'color':'tab:red', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeCFP, jnCFP, qlo, qla)    
+    kwargs = {'color':'tab:blue', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeCF, jnCF, qlo, qla)    
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('J, JH, JP (pot)')    
+    # Current densities (ind)
+    # -----------------
+    ax = axes[1, 2]
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeDFH, jnDFH, qlo, qla)    
+    kwargs = {'color':'tab:red', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current_DF']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeDFP, jnDFP, qlo, qla)    
+    kwargs = {'color':'tab:blue', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current_DF']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeDF, jnDF, qlo, qla)    
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current_DF']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('J, JH, JP (ind)')    
+    # Current densities
+    # -----------------
+    ax = axes[2, 2]
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeH, jnH, qlo, qla)    
+    kwargs = {'color':'tab:red', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(jeP, jnP, qlo, qla)    
+    kwargs = {'color':'tab:blue', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(je, jn, qlo, qla)    
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['electric_current']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('J, JH, JP')
+    
+    
+    # Joule (pot)
+    # --------------------
+    ax = axes[0, 3]
+    ax.contourf(xi, eta, JouleCF, cmap='Oranges', levels=colorscales['joule'])
+    ax.set_title('Joule (pot): {}'.format(np.round(np.sum(JouleCF)*1e3, 1)))
+    # Joule (ind)
+    # --------------------
+    ax = axes[1, 3]
+    ax.contourf(xi, eta, JouleDF, cmap='PuOr_r', levels=colorscales['joule_DF'])
+    ax.set_title('Joule (ind): {}'.format(np.round(np.sum(JouleDF)*1e3, 1)))
+    # Joule
+    # --------------------
+    ax = axes[2, 3]
+    ax.contourf(xi, eta, Joule, cmap='Oranges', levels=colorscales['joule'])
+    ax.set_title('Joule: {}'.format(np.round(np.sum(Joule)*1e3, 1)))
+    
+    
+    # dBr/dt
+    # --------------------
+    ax = axes[0, 4]
+    ax.contourf(xi_mesh, eta_mesh, dBrdt, cmap='bwr', levels=colorscales['dbdt'])
+    ax.set_title('dBr/dt')
+    # Hall conductance
+    # --------------------
+    ax = axes[1, 4]
+    ax.contourf(xi, eta, SH, cmap=CMAP, levels=colorscales['hall'])
+    ax.set_title('Hall conductance')
+    # Pedersen conductance
+    # --------------------
+    ax = axes[2, 4]
+    ax.contourf(xi, eta, SP, cmap=CMAP, levels=colorscales['pedersen'])
+    ax.set_title('Pedersen conductance')
+    
+    
+    # Bg (pot)
+    # --------------------
+    ax = axes[0, 5]
+    ax.contourf(xi_mesh, eta_mesh, BuCF.reshape(model.grid_E.shape), cmap='bwr', levels=colorscales['ground_mag'])
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(BeCF, BnCF, qlo, qla)
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['ground_mag']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('B ground (pot)')
+    # Bg (ind)
+    # --------------------
+    ax = axes[1, 5]
+    ax.contourf(xi_mesh, eta_mesh, BuDF.reshape(model.grid_E.shape), cmap='bwr', levels=colorscales['ground_mag_DF'])
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(BeDF, BnDF, qlo, qla)
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['ground_mag_DF']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    ax.set_title('B ground (ind)')
+    # B
+    # --------------------
+    ax = axes[2, 5]
+    ax.contourf(xi_mesh, eta_mesh, Bu.reshape(model.grid_E.shape), cmap='bwr', levels=colorscales['ground_mag'])
+    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(Be, Bn, qlo, qla)
+    kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['ground_mag']}
+    ax.quiver(x, y, Ax, Ay, **kwargs)
+    if show_data_location:
+        plot_locations(ax, model, 'ground_mag')
+    if include_data:
+        plot_datasets(ax, model, 'ground_mag')
+    ax.set_title('B ground + data')
+    
+    
+    # Make scales
+    #------------
+    cbarax1 = plt.subplot2grid((36, 60), (34, 1 ), rowspan = 1, colspan = 8)
+    cbarax2 = plt.subplot2grid((36, 60), (34, 11), rowspan = 1, colspan = 8)
+    cbarax3 = plt.subplot2grid((36, 60), (34, 21), rowspan = 1, colspan = 8)
+    cbarax4 = plt.subplot2grid((36, 60), (34, 31), rowspan = 1, colspan = 8)
+    cbarax5 = plt.subplot2grid((36, 60), (34, 41), rowspan = 1, colspan = 8)
+    
+    lvls = colorscales['fac']
+    xx = np.vstack((lvls, lvls)) * 1e6
+    yy = np.vstack((np.zeros_like(lvls), np.ones_like(lvls)))
+    cbarax1.contourf(xx, yy, xx, cmap=plt.cm.bwr, levels=lvls*1e6)
+    cbarax1.set_xlabel('FAC (pot) [$\mu$A/m$^2$]')
+    cbarax1.set_yticks([])
+    buax = plt.twiny(cbarax1)
+    buax.set_xlim(colorscales['fac_DF'].min() *1e6, colorscales['fac_DF'].max() * 1e6)
+    buax.set_xlabel('FAC (ind) [$\mu$A/m$^2$]')
+    
+    lvls = colorscales['hall']
+    xx = np.vstack((lvls, lvls))
+    yy = np.vstack((np.zeros_like(lvls), np.ones_like(lvls)))
+    cbarax2.contourf(xx, yy, xx, cmap=CMAP, levels=lvls)
+    cbarax2.set_xlabel('$\Sigma_H$ $\Sigma_P$ [mho]')
+    cbarax2.set_yticks([])
+    if time != None:
+        cbarax2.set_title(str(time) + ' UT', fontweight = 'bold')
+    
+    lvls = np.linspace(-np.max(colorscales['joule']), np.max(colorscales['joule']), 40)*1e3
+    xx = np.vstack((lvls, lvls))
+    yy = np.vstack((np.zeros_like(lvls), np.ones_like(lvls)))
+    cbarax3.contourf(xx, yy, xx, cmap=plt.cm.PuOr_r, levels=lvls)
+    cbarax3.set_xlabel('Joule (pot) [$mW/m^2$]')
+    cbarax3.set_yticks([])
+    buax = plt.twiny(cbarax3)
+    buax.set_xlim(colorscales['joule_DF'].min()*1e3, colorscales['joule_DF'].max()*1e3)
+    buax.set_xlabel('Joule (ind) [$mW/m^2$]')
+    
+    lvls = colorscales['dbdt']*1e9
+    xx = np.vstack((lvls, lvls))
+    yy = np.vstack((np.zeros_like(lvls), np.ones_like(lvls)))
+    cbarax4.contourf(xx, yy, xx, cmap=plt.cm.bwr, levels=lvls)
+    cbarax4.set_xlabel('dBrdt [nT/dt]')
+    cbarax4.set_yticks([])
+    
+    lvls = colorscales['ground_mag']
+    xx = np.vstack((lvls, lvls)) * 1e9
+    yy = np.vstack((np.zeros_like(lvls), np.ones_like(lvls)))
+    cbarax5.contourf(xx, yy, xx, cmap=plt.cm.bwr, levels=lvls*1e9)
+    cbarax5.set_xlabel('B (pot) [nT]')
+    cbarax5.set_yticks([])
+    buax = plt.twiny(cbarax5)
+    buax.set_xlim(colorscales['ground_mag_DF'].min()*1e9, colorscales['ground_mag_DF'].max()*1e9)
+    buax.set_xlabel('B (ind) [nT]')
+    
+    arrowax = plt.subplot2grid((36, 60), (33, 51), rowspan = 1, colspan = 8)
+    arrowax.set_axis_off()
+    arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')
+    arrowax.set_ylim(0, 1)
+    arrowax.set_xlim(0, 20)
+    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s  (pot)'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_fac'] * 1e9 // 2, quiverscales['electric_current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top')
+    
+    arrowax = plt.subplot2grid((36, 60), (35, 51), rowspan = 1, colspan = 8)
+    arrowax.set_axis_off()
+    arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')
+    arrowax.set_ylim(0, 1)
+    arrowax.set_xlim(0, 20)
+    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s  (ind)'.format(quiverscales['ground_mag_DF'] * 1e9 // 2, quiverscales['space_mag_fac_DF'] * 1e9 // 2, quiverscales['electric_current_DF'] * 1e3 // 2, quiverscales['convection_DF'] // 2 ), ha = 'left', va = 'top')
+    
     # Finish
     # ------
     plt.subplots_adjust(top=0.91, bottom=0.065, left=0.01, right=0.99, hspace=0.1, wspace=0.02) 
