@@ -46,7 +46,7 @@ def extrapolation_check(func):
             return func(model, **argdict)
 
         # creates warning if there are points outside the grid
-        if not (func.__name__.startswith('_') and func.__name__.endswith('matrix')) and not np.all(model.grid_E.ingrid(argdict['lon'], argdict['lat'])):
+        if not (func.__name__.startswith('_') and func.__name__.endswith('matrix')) and not np.all(model.gH.grid_E.ingrid(argdict['lon'], argdict['lat'])):
             warnings.warn('Some points of evaluation are outside the grid and are therefore poorly informed', UserWarning)
         
         return func(model, **argdict)
@@ -69,7 +69,7 @@ def check_input(func):
             raise Exception("check_input: 'self' missing from function {}".format(func.__name__))
         
         model = args[0]
-        if type(model).__name__ not in ['Cmodel', 'Emodel', 'Cmodel2']:
+        if type(model).__name__ not in ['Design', 'Evaluator']:
             raise Exception('Function {} is not part of model class'.format(func.__name__)) 
 
         # build dictionary of arguments that are passed to function:
@@ -89,11 +89,11 @@ def check_input(func):
 
         # set default values
         if argdict['lat'] is None:
-            argdict['lat'] = model.lat_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.lat_J
+            argdict['lat'] = model.gH.lat_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.gH.lat_J
         if argdict['lon'] is None:
-            argdict['lon'] = model.lon_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.lon_J
+            argdict['lon'] = model.gH.lon_E if ('B' in func.__name__ or 'get_SECS_currents' in func.__name__) else model.gH.lon_J
         if 'r' in argdict.keys() and argdict['r'] is None:       
-            argdict['r'] = 2 * model.R - RE if 'cf' in func.__name__ else RE
+            argdict['r'] = 2 * model.gH.R - RE if 'cf' in func.__name__ else RE
         # list of parameters passed to func
         params = ['r', 'lat', 'lon'] if 'r' in argdict.keys() else ['lat', 'lon']
 
@@ -113,9 +113,9 @@ def check_input(func):
 
         # ensure that coordinates make sense
         if 'r' in params:
-            if np.any(argdict['r'] < model.R * .5):
+            if np.any(argdict['r'] < model.gH.R * .5):
                 raise Exception('radii passed to {} are too low to make sense'.format(func.__name__))
-        xi, eta = model.grid_E.projection.geo2cube(argdict['lon'], argdict['lat'])
+        xi, eta = model.gH.grid_E.projection.geo2cube(argdict['lon'], argdict['lat'])
 
         # all done - return with shape or not
         if 'return_shape' in argdict.keys() and argdict['return_shape']:

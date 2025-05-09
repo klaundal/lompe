@@ -1,17 +1,4 @@
-""" lompe visualization tools 
-
-Lots of function to help plot the different lompe quantities
-in a nice way. 
-
-The default plotting tool is lompeplot. See documentation of that function
-for more details. 
-
-If you want more custom plots, there are many tools in this script that can 
-be helpful. For example, the Polarplot class is good for making mlt/mlat 
-plots.
-
-"""
-
+#%%
 import matplotlib.pyplot as plt
 import numpy as np
 import apexpy
@@ -22,34 +9,38 @@ from matplotlib.patches import Polygon, Ellipse
 from matplotlib.collections import PolyCollection, LineCollection
 from polplot import Polarplot
 
+#%%
+
 rc('font', **{'family': 'sans-serif', 'sans-serif': ['Verdana']})
 rc('text', usetex=False)
 
-
-###############################
-# DEFINE SOME GLOBAL PARAMETERS
-
 # Default arrow scales (all SI units):
-QUIVERSCALES = {'ground_mag':       600 * 1e-9 , # ground magnetic field scale [T]
-                'space_mag_fac':    600 * 1e-9 , # FAC magnetic field scale [T]                
-                'convection':       2000       , # convection velocity scale [m/s]
-                'efield':           100  * 1e-3, # electric field scale [V/m]
-                'electric_current': 1000 * 1e-3, # electric surface current density [A/m] Ohm's law 
-                'ground_mag_DF':       1 * 1e-9 , # ground magnetic field scale [T]
-                'space_mag_fac_DF':    5 * 1e-9 , # FAC magnetic field scale [T]
-                'convection_DF':       5       , # convection velocity scale [m/s]
-                'efield_DF':           .5  * 1e-3, # electric field scale [V/m]
-                'electric_current_DF': 10 * 1e-3, # electric surface current density [A/m] Ohm's law 
-                'secs_current':     1000 * 1e-3, # electric surface current density [A/m] SECS 
-                'space_mag_full':   600 * 1e-9 } # FAC magnetic field scale [T]
+QUIVERSCALES_CF = {'ground_mag':       600 * 1e-9 , # ground magnetic field scale [T]
+                   'space_mag_fac':    600 * 1e-9 , # FAC magnetic field scale [T]                
+                   'convection':       2000       , # convection velocity scale [m/s]
+                   'efield':           100  * 1e-3, # electric field scale [V/m]
+                   'current': 1000 * 1e-3, # electric surface current density [A/m] Ohm's law 
+                   'secs_current':     1000 * 1e-3, # electric surface current density [A/m] SECS 
+                   'space_mag_full':   600 * 1e-9   # FAC magnetic field scale [T]
+                   }
+
+QUIVERSCALES_DF = {'ground_mag':       1 * 1e-9 , # ground magnetic field scale [T]
+                   'space_mag_fac':    5 * 1e-9 , # FAC magnetic field scale [T]
+                   'convection':       5       , # convection velocity scale [m/s]
+                   'efield':           .5  * 1e-3, # electric field scale [V/m]
+                   'current': 10 * 1e-3, # electric surface current density [A/m] Ohm's law 
+                   }
 
 # Default color scales (SI units):
-COLORSCALES =  {'fac':        np.linspace(-1.95, 1.95, 40) * 1e-6 * 2,
-                'ground_mag': np.linspace(-980, 980, 50) * 1e-9 / 3, # upward component
-                'fac_DF':        np.linspace(-.02, .02, 40) * 1e-6 * 2,
-                'ground_mag_DF': np.linspace(-1, 1, 50) * 1e-9 / 3, # upward component
-                'hall':       np.linspace(0, 20, 32), # mho
-                'pedersen':   np.linspace(0, 20, 32)} # mho
+COLORSCALES_CF =  {'fac':        np.linspace(-1.95, 1.95, 40) * 1e-6 * 2,
+                   'ground_mag': np.linspace(-980, 980, 50) * 1e-9 / 3, # upward component
+                   'hall':       np.linspace(0, 20, 32), # mho
+                   'pedersen':   np.linspace(0, 20, 32) # mho
+                   }
+
+COLORSCALES_DF =  {'fac':        np.linspace(-.02, .02, 40) * 1e-6 * 2,
+                   'ground_mag': np.linspace(-1, 1, 50) * 1e-9 / 3, # upward component
+                   }
 
 
 # Default color map:
@@ -60,35 +51,7 @@ RE = 6371.2e3 # Earth radius in meters
 # Number of arrows to plot along smallest dimension:
 NN = 12 
 
-# Dict of lompe.Model function names for calculating different parameters
-funcs = {'efield':           'E', 
-         'convection':       'v', 
-         'ground_mag':       'B_ground',
-         'electric_current': 'j',
-         'space_mag_fac':    'B_space_FAC',
-         'space_mag_full':   'B_space',
-         'fac':              'FAC',
-         'hall':             'hall_conductance',
-         'pedersen':         'pedersen_conductance',
-         'secs_current':     'get_B_SECS_currents'} # This attribute doesn't exist currently
-
-funcs_DF = {'efield':           'E_DF', 
-            'convection':       'v_DF', 
-            'ground_mag':       'B_ground_DF',
-            'electric_current': 'j_DF',
-            'space_mag_fac':    'B_space_FAC_DF',
-            'space_mag_full':   'B_space_DF',
-            'fac':              'FAC_DF',
-            'hall':             'hall_conductance',
-            'pedersen':         'pedersen_conductance',
-            'secs_current':     'get_B_SECS_currents'} # This attribute doesn't exist currently
-
-# GLOBAL PARAMETERS DONE
-########################
-
-
-# HELPER FUNCTIONS
-##################
+#%%
 
 def plot_coastlines(ax, model, resolution = '110m', **kwargs):
     """ plot coastlines on axis 
@@ -108,17 +71,18 @@ def plot_coastlines(ax, model, resolution = '110m', **kwargs):
     if model.dipole:
         cd = Dipole(model.epoch)
 
-    for cl in model.grid_J.projection.get_projected_coastlines(resolution = resolution):
+    for cl in model.gH.grid_J.projection.get_projected_coastlines(resolution = resolution):
         xi, eta = cl
         if model.dipole: 
-            lon, lat = model.grid_J.projection.cube2geo(xi, eta) # retrieve geographic coords
+            lon, lat = model.gH.grid_J.projection.cube2geo(xi, eta) # retrieve geographic coords
             mlat, mlon = cd.geo2mag(lat, lon) # convert to magnetic
-            xi, eta = model.grid_J.projection.geo2cube(mlon, mlat) # and back to xi, eta
+            xi, eta = model.gH.grid_J.projection.geo2cube(mlon, mlat) # and back to xi, eta
 
         ax.plot(xi, eta, **kwargs)
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
+#%%
 
 def plot_mlt(ax, model, time, apex, mltlevels = np.r_[0:24:3], txtkwargs = None, **kwargs):
     """ plot mlt meridians 
@@ -153,12 +117,12 @@ def plot_mlt(ax, model, time, apex, mltlevels = np.r_[0:24:3], txtkwargs = None,
 
             
     if model.dipole:
-        mlat, mlon = model.grid_J.lat, model.grid_J.lon
+        mlat, mlon = model.gH.lat_J, model.gH.lon_J
     else:
-        mlat, mlon = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, (model.R-RE)*1e-3) # to magnetic
+        mlat, mlon = apex.geo2apex(model.gH.lat_J, model.gH.lon_J, (model.gH.R-RE)*1e-3) # to magnetic
     
     cd = Dipole(apex.year)
-    mlt = cd.mlon2mlt(mlon, time)
+    #mlt = cd.mlon2mlt(mlon, time)
     mlat = np.linspace(mlat.min(), mlat.max(), 50)
 
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
@@ -168,16 +132,17 @@ def plot_mlt(ax, model, time, apex, mltlevels = np.r_[0:24:3], txtkwargs = None,
             lat, lon = mlat, np.ones(mlat.shape)*mlon_
         else:
             lat, lon, _ = apex.apex2geo(mlat, mlon_, 0)
-        iii = model.grid_J.ingrid(lon, lat)
+        iii = model.gH.grid_J.ingrid(lon, lat)
         if np.sum(iii) > 2:
-            xi, eta = model.grid_J.projection.geo2cube(lon[iii], lat[iii]) # to xi, eta
+            xi, eta = model.gH.grid_J.projection.geo2cube(lon[iii], lat[iii]) # to xi, eta
             ax.plot(xi, eta, **kwargs)
             ax.text(xi[len(xi)//2], eta[len(xi)//2], str(np.int32(mltlevel)).zfill(2), **txtkwargs)
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
-        
+#%%    
+    
 def format_ax(ax, model, apex = None, **kwargs):
     """ function to format axis for plotting lompe output
 
@@ -195,11 +160,11 @@ def format_ax(ax, model, apex = None, **kwargs):
     """ 
     
     if not model.dipole and (apex != None):
-        lat, _ = apex.geo2apex(model.grid_J.lat, model.grid_J.lon, (model.R-RE)*1e-3)
+        lat, _ = apex.geo2apex(model.gH.lat_J, model.gH.lon_J, (model.gH.R-RE)*1e-3)
     elif model.dipole:
-        lat = model.grid_J.lat
+        lat = model.gH.lat_J
     else:
-        lat = model.grid_J.lat
+        lat = model.gH.lat_J
     
     if 'levels' not in kwargs.keys():
         kwargs['levels'] = np.r_[-85:89:5]
@@ -208,22 +173,17 @@ def format_ax(ax, model, apex = None, **kwargs):
     if 'linewidths' not in kwargs.keys():
         kwargs['linewidths'] = .5
 
-    cs1 = ax.contour(model.grid_J.xi, model.grid_J.eta, lat, **kwargs)
+    cs1 = ax.contour(model.gH.xi_J, model.gH.eta_J, lat, **kwargs)
     ax.clabel(cs1, inline=1, fontsize=10, fmt = '%1.0f$^\circ$')
     ax.set_axis_off()
     ax.set_aspect('equal')
 
-    projection = model.grid_J.projection
+    projection = model.gH.grid_J.projection
     ax.format_coord = lambda xi, eta: 'lon = {:.2f}, lat = {:.2f}'.format(* tuple(projection.cube2geo(xi,eta))) 
 
+#%%
 
-# HELPER FUNCTIONS DONE
-#######################
-
-
-#####################
-# PLOTTING FUNCTIONS 
-def plot_quiver(ax, model, dtype, scale = None, DF=False, hall=True, ped=True, **kwargs):
+def plot_quiver(ax, model, dtype, scale = None, comp='CF', Jcomp='both', **kwargs):
     """ quiver plot of dtype on uniform grid
     
     parameters
@@ -248,95 +208,52 @@ def plot_quiver(ax, model, dtype, scale = None, DF=False, hall=True, ped=True, *
     if 'zorder' not in kwargs.keys():
         kwargs['zorder'] = 3
 
-    if scale == None:
-        if DF is True:
-            kwargs['scale'] = QUIVERSCALES[dtype + '_DF']
+    if scale == None:        
+        if comp=='DF':
+            kwargs['scale'] = QUIVERSCALES_DF[dtype]
         else:
-            kwargs['scale'] = QUIVERSCALES[dtype]
+            kwargs['scale'] = QUIVERSCALES_CF[dtype]
     else:
         kwargs['scale'] = scale
 
     if 'scale_units' not in kwargs.keys():
         kwargs['scale_units'] = 'inches'
 
-    sh = np.array(model.grid_J.shape)
+    sh = np.array(model.gH.shape_J)
 
     # get function values on plotting grid:
     sh = sh // sh.min() * NN 
-    ximin  = model.grid_J.xi .min() + model.grid_J.dxi  / 3
-    ximax  = model.grid_J.xi .max() - model.grid_J.dxi  / 3
-    etamin = model.grid_J.eta.min() + model.grid_J.deta / 3
-    etamax = model.grid_J.eta.max() - model.grid_J.deta / 3
+    ximin  = model.gH.xi_J .min() + model.gH.dxi_J  / 3
+    ximax  = model.gH.xi_J .max() - model.gH.dxi_J  / 3
+    etamin = model.gH.eta_J.min() + model.gH.deta_J / 3
+    etamax = model.gH.eta_J.max() - model.gH.deta_J / 3
     xi, eta = np.meshgrid(np.linspace(ximin, ximax, sh[1]), np.linspace(etamin, etamax, sh[1]))
-    lo, la = model.grid_J.projection.cube2geo(xi, eta)
+    lo, la = model.gH.grid_J.projection.cube2geo(xi, eta)
     
-    stuff = {'lon':lo, 'lat':la}
-    if dtype == 'electric_current':
-        stuff['hall'] = False
-        stuff['ped'] = False
-        if hall:
-            stuff['hall'] = True
-        if ped:
-            stuff['ped'] = True
+    # Gather input arguments
+    args = {'lon':lo, 'lat':la, 'comp':comp}
+    if Jcomp != 'both':
+        args['decomp'] = True
     
-    if DF is True:
-        func = getattr(model, funcs_DF[dtype])
-        A = func(stuff)
-        if len(A) == 2:
-            Ae, An = A        
-        if len(A) == 3:
-            Ae, An, Au = A
-        
-    elif DF is False:
-        func = getattr(model, funcs[dtype])
-        A = func(stuff)
-        if len(A) == 2:
-            Ae, An = A        
-        if len(A) == 3:
-            Ae, An, Au = A
-        
-    elif DF is None:
-        func = getattr(model, funcs_DF[dtype])        
-        B = func(stuff)
-        func = getattr(model, funcs[dtype])
-        C = func(stuff)
-        A = []
-        for Bi, Ci in zip(B, C):
-            A.append(Bi + Ci)
-        if len(A) == 2:
-            Ae, An = A        
-        if len(A) == 3:
-            Ae, An, Au = A
+    # Find and call function
+    A = model.ev.func.get(dtype)(**args)
     
-    '''
-    scale = 1
-    if dtype == 'space_mag_fac':
-        scale = 2e9
-    elif dtype == 'electric_current':
-        scale = 3e2
-    elif dtype == 'ground_mag':
-        scale = 5e9
-                
+    # Unpack
+    if Jcomp == 'hall':
+        A = A[:2]
+    if Jcomp == 'Pedersen':
+        A = A[2:]    
+    if len(A) == 2:
+        Ae, An = A        
     if len(A) == 3:
-        Au *= scale
-    Ae *= scale
-    An *= scale
-        
-        
-    if dtype != 'electric_current':
-        if len(model.data[dtype]) != 0:
-            if len(A) == 3:
-                Au *= model.data[dtype][0].scale
-            Ae *= model.data[dtype][0].scale
-            An *= model.data[dtype][0].scale
-    '''
-    
-    x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(Ae, An, lo, la)
+        Ae, An, Au = A
+            
+    x, y, Ax, Ay = model.gH.grid_J.projection.vector_cube_projection(Ae, An, lo, la)
     
     return ax.quiver(x, y, Ax, Ay, **kwargs)
 
 
-def plot_contour(ax, model, dtype, vertical = False, DF=False, **kwargs):
+def plot_contour(ax, model, dtype, vertical = False, comp='CF', **kwargs):
     """ plot parameters as contour plot  
     
     parameters
@@ -354,44 +271,11 @@ def plot_contour(ax, model, dtype, vertical = False, DF=False, **kwargs):
 
     """
     
-    if DF is None:
-        func = getattr(model, funcs_DF[dtype])
-        B = func()
-        func = getattr(model, funcs[dtype])
-        C = func()
-        if len(B) not in [2, 3]:
-            z = B + C
-        else:
-            A = []
-            for Bi, Ci in zip(B, C):
-                A.append(Bi + Ci)
-            if len(A) == 2:
-                Ae, An= A[0], A[1]
-                z = np.sqrt(Ae**2 + An**2)
-            if len(A) == 3:
-                Ae, An, Au = A
-                if not vertical:
-                    z = np.sqrt(Ae**2 + An**2)
-                else:
-                    z = Au
-    else:
-        if DF is True:
-            func = getattr(model, funcs_DF[dtype])
-        else:
-            func = getattr(model, funcs[dtype])
-        A = func()
-        if len(A) not in [2, 3]:
-            z = A # treat as scalar field
-        if len(A) == 2:
-            Ae, An= A[0], A[1]
-            z = np.sqrt(Ae**2 + An**2)
-        if len(A) == 3:
-            Ae, An, Au = A
-            if not vertical:
-                z = np.sqrt(Ae**2 + An**2)
-            else:
-                z = Au
-
+    if 'zorder' not in kwargs.keys():
+        kwargs['zorder'] = 0
+    if 'extend' not in kwargs.keys():
+        kwargs['extend'] = 'both'
+    
     if 'cmap' not in kwargs.keys():
         if vertical or dtype == 'fac':
             kwargs['cmap'] = plt.cm.bwr
@@ -399,29 +283,34 @@ def plot_contour(ax, model, dtype, vertical = False, DF=False, **kwargs):
             kwargs['cmap'] = CMAP
 
     if 'levels' not in kwargs.keys():
-        if DF is True:
-            kwargs['levels'] = COLORSCALES[dtype + '_DF']
+        if comp == 'DF':
+            kwargs['levels'] = COLORSCALES_DF[dtype]
         else:
-            kwargs['levels'] = COLORSCALES[dtype]
-        
-
-
-    if 'zorder' not in kwargs.keys():
-        kwargs['zorder'] = 0
-    if 'extend' not in kwargs.keys():
-        kwargs['extend'] = 'both'
-
-    '''
-    if dtype == 'ground_mag':
-        z *= 3e2
-    if dtype == 'fac':
-        z *= 5e2
-    '''
-        
-    if z.size == model.grid_J.xi.size:
-        xi, eta, z = model.grid_J.xi , model.grid_J.eta , z.reshape(model.grid_J.shape)
+            kwargs['levels'] = COLORSCALES_CF[dtype]
+    
+    # Find and call function - Using default gridding
+    if (dtype != 'hall') or (dtype != 'pedersen'):
+        A = model.ev.func.get(dtype)()
     else:
-        xi, eta, z = model.grid_E.xi, model.grid_E.eta, z.reshape(model.grid_E.shape)
+        A = model.ev.func.get(dtype)(comp=comp)
+    
+    # Unpack
+    if len(A) not in [2, 3]:
+        z = A # treat as scalar field
+    if len(A) == 2:
+        Ae, An= A[0], A[1]
+        z = np.sqrt(Ae**2 + An**2)
+    if len(A) == 3:
+        Ae, An, Au = A
+        if not vertical:
+            z = np.sqrt(Ae**2 + An**2)
+        else:
+            z = Au    
+                
+    if z.size == model.gH.size_J:
+        xi, eta, z = model.gH.xi_J , model.gH.eta_J , z.reshape(model.gH.shape_J)
+    else:
+        xi, eta, z = model.gH.xi_E, model.gH.eta_E, z.reshape(model.gH.shape_E)
 
     return(ax.contourf(xi, eta, z, **kwargs))
 
@@ -458,7 +347,7 @@ def plot_datasets(ax, model, dtype = 'convection', scale = None, **kwargs):
         kwargs['zorder'] = 2
 
     if scale == None:
-        kwargs['scale'] = QUIVERSCALES[dtype]
+        kwargs['scale'] = QUIVERSCALES_CF[dtype]
     else:
         kwargs['scale'] = scale
 
@@ -472,14 +361,14 @@ def plot_datasets(ax, model, dtype = 'convection', scale = None, **kwargs):
             A = dataset.values
             Ae, An = A * dataset.los[0], A * dataset.los[1]
             lon, lat = dataset.coords['lon'], dataset.coords['lat']
-            x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(Ae, An, lon, lat)
+            x, y, Ax, Ay = model.gH.grid_J.projection.vector_cube_projection(Ae, An, lon, lat)
         else:
             if dataset.values.shape[0] == 2:
                 Ae, An = dataset.values
             if dataset.values.shape[0] == 3:
                 Ae, An, Au = dataset.values
             lon, lat = dataset.coords['lon'], dataset.coords['lat']
-            x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(Ae, An, lon, lat)
+            x, y, Ax, Ay = model.gH.grid_J.projection.vector_cube_projection(Ae, An, lon, lat)
         qs = ax.quiver(x, y, Ax, Ay, **kwargs)
 
     ax.set_xlim(*xlim)
@@ -505,14 +394,14 @@ def plot_locations(ax, model, dtype='convection', **kwargs):
     xlim, ylim = ax.get_xlim(), ax.get_ylim()
     for dataset in model.data[dtype]:
         lon, lat = dataset.coords['lon'], dataset.coords['lat']
-        x, y= model.grid_J.projection.geo2cube(lon, lat)
+        x, y= model.gH.grid_J.projection.geo2cube(lon, lat)
         scat = ax.scatter(x, y, **kwargs)
 
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
     return(scat)
 
-def plot_potential(ax, model, DF=False, **kwargs):
+def plot_potential(ax, model, **kwargs):
     """ plot electric potential on axis 
 
     parameters
@@ -525,27 +414,42 @@ def plot_potential(ax, model, DF=False, **kwargs):
         default contour interval is set to 5 kV. Change by specifying
         a different 'levels' value.
     """
-    if DF:
-        V = model.E_pot(current_type='stream').reshape(model.grid_J.shape) * 1e-3
-    else:
-        V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
-    V = V - V.min() - (V.max() - V.min())/2
-
-    '''
-    V *= 3e2
-    '''
-
+    A = model.ev.Phi()*1e-3
+    A = A - A.min() - (A.max() - A.min())/2
     if 'levels' not in kwargs.keys():
-        dV = 5 # contour level step size in kV
-        if DF:
-            dV = 1
-        kwargs['levels'] = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
+        dA = 5 # contour level step size in kV
+        kwargs['levels'] = np.r_[(A.min()//dA)*dA :(A.max()//dA)*dA + dA:dA]
     if 'colors' not in kwargs.keys():
         kwargs['colors'] = 'C0'
     if 'linewidths' not in kwargs.keys():
         kwargs['linewidths'] = 2
 
-    return(ax.contour(model.grid_J.xi, model.grid_J.eta, V, **kwargs))
+    return(ax.contour(model.gH.xi_J, model.gH.eta_J, A, **kwargs))
+
+def plot_stream(ax, model, **kwargs):
+    """ plot electric stream function on axis 
+
+    parameters
+    ----------
+    ax: matplotlib.axes._subplots.AxesSubplot object
+        axis to plot on
+    model: lompe.Model object
+        model object that contains the dataset
+    kwargs: passed to contour
+        default contour interval is set to 5 kV. Change by specifying
+        a different 'levels' value.
+    """
+    A = model.ev.W()*1e-3
+    A = A - A.min() - (A.max() - A.min())/2
+    if 'levels' not in kwargs.keys():
+        dA = 1 # contour level step size in kV
+        kwargs['levels'] = np.r_[(A.min()//dA)*dA :(A.max()//dA)*dA + dA:dA]
+    if 'colors' not in kwargs.keys():
+        kwargs['colors'] = 'C1'
+    if 'linewidths' not in kwargs.keys():
+        kwargs['linewidths'] = 2
+
+    return(ax.contour(model.gH.xi_J, model.gH.eta_J, A, **kwargs))
 
 def polarplot(ax, model, apex, time, dV = None, **clkw):
     """ plot grid and coastlines on mlt/mlat grid
@@ -586,29 +490,28 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
         
     pax.coastlines(time = time, mag = apex, resolution=resolution, **kwargs)
 
-    grid = model.grid_E
-    xs = (grid.lon_mesh[0, :], grid.lon_mesh[-1, :], grid.lon_mesh[:, 0], grid.lon_mesh[:, -1])
-    ys = (grid.lat_mesh[0, :], grid.lat_mesh[-1, :], grid.lat_mesh[:, 0], grid.lat_mesh[:, -1])
+    xs = (model.gH.lonm_E[0, :], model.gH.lonm_E[-1, :], model.gH.lonm_E[:, 0], model.gH.lonm_E[:, -1])
+    ys = (model.gH.latm_E[0, :], model.gH.latm_E[-1, :], model.gH.latm_E[:, 0], model.gH.latm_E[:, -1])
     for i, c in enumerate(zip(xs, ys)):
         lon, lat = c
         if not model.dipole:    
-            lat, lon = apex.geo2apex(lat, lon, (model.R-RE)*1e-3)   # to magnetic apex
+            lat, lon = apex.geo2apex(lat, lon, (model.gH.R-RE)*1e-3)   # to magnetic apex
         mlt = cd.mlon2mlt(lon, time)
         pax.plot(lat, mlt, color = 'black', linewidth = 1.5 if i == 0 else .5, zorder = 2)
 
     if dV != None: # plot electric potential
-        V = model.E_pot().reshape(model.grid_J.shape) * 1e-3
+        V = model.Phi().reshape(model.gH.shape_J) * 1e-3
         V = V - V.min() - (V.max() - V.min())/2
-        lat, lon = model.grid_J.lat, model.grid_J.lon
+        lat, lon = model.gH.lat_J, model.gH.lon_J
         if not model.dipole:
-            lat, lon = apex.geo2apex(lat, lon, (model.R-RE)*1e-3)   # to magnetic apex
+            lat, lon = apex.geo2apex(lat, lon, (model.gH.R-RE)*1e-3)   # to magnetic apex
         mlt = cd.mlon2mlt(lon, time)
 
         levels = np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV]
 
         pax.contour(lat, mlt, V, levels = levels, colors = 'C0', linewidths = 1, zorder = 3)
 
-def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
+def plot_SECS_amplitudes(ax, model, comp='CF', curl_free=True, **kwargs):
     """ plot SECS amplitudes
     
     plot the amplitude of the magnetic field SECS poles in color, one per cell,
@@ -631,19 +534,26 @@ def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
         kwargs['zorder'] = 0
 
     if 'levels' not in kwargs.keys():
-        levels = COLORSCALES['fac']
+        levels = COLORSCALES_CF['fac']
     else:
         levels = kwargs['levels']
         kwargs.pop('levels')
 
     kwargs['norm'] = plt.matplotlib.colors.BoundaryNorm(levels, ncolors = kwargs['cmap'].N, clip = True)
 
-    if curl_free:
-        S = model.B_cf_matrix(return_poles = True) / np.diag(model.A)[:-1]
+    if comp == 'DF':
+        if curl_free:
+            S = model.builder.B_cf_matrix_DF(return_poles = True).dot(model.m_DF) / np.diag(model.A)[:-1]
+        else:
+            S = model.builder.B_df_matrix_DF(return_poles = True).dot(model.m_DF) / np.diag(model.A)[:-1]
     else:
-        S = model.B_df_matrix(return_poles = True) / np.diag(model.A)[:-1]
-    S = S.reshape(model.grid_J.shape)
-    ax.pcolormesh(model.grid_J.xi_mesh, model.grid_J.eta_mesh, S, **kwargs)
+        if curl_free:
+            S = model.builder.B_cf_matrix_CF(return_poles = True).dot(model.m_CF) / np.diag(model.A)[:-1]
+        else:
+            S = model.builder.B_df_matrix_CF(return_poles = True).dot(model.m_CF) / np.diag(model.A)[:-1]
+            
+    S = S.reshape(model.gH.shape_J)
+    ax.pcolormesh(model.gH.xim_J, model.gH.etam_J, S, **kwargs)
     
 def lompeplot(model, figheight = 9, include_data = False, show_data_location= False, apex = None, time = None, 
                      savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
@@ -688,20 +598,20 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     """
 
     if quiverscales == None:
-        quiverscales = QUIVERSCALES
+        quiverscales = QUIVERSCALES_CF
     else:
-        QUIVERSCALES.update(quiverscales)
-        quiverscales = QUIVERSCALES
+        QUIVERSCALES_CF.update(quiverscales)
+        quiverscales = QUIVERSCALES_CF
 
     if colorscales == None:
-        colorscales = COLORSCALES
+        colorscales = COLORSCALES_CF
     else:
-        COLORSCALES.update(colorscales)
-        colorscales = COLORSCALES
+        COLORSCALES_CF.update(colorscales)
+        colorscales = COLORSCALES_CF
 
     # Set up figures
     # --------------
-    ar = model.grid_E.shape[1] / model.grid_E.shape[0] # aspect ratio
+    ar = model.gH.shape_E[1] / model.gH.shape_E[0] # aspect ratio
     figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
 
     fig = plt.figure(figsize = figsize)
@@ -767,7 +677,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     # Current densities
     # -----------------
     ax = axes[1, 2]
-    plot_quiver(ax, model, 'electric_current')
+    plot_quiver(ax, model, 'current')
     ax.set_title('Electric currents')
     if debug:
         plot_SECS_amplitudes(ax, model, curl_free = True)
@@ -790,7 +700,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')
     arrowax.set_ylim(0, 1)
     arrowax.set_xlim(0, 20)
-    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_full'] * 1e9 // 2, quiverscales['electric_current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top')
+    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_full'] * 1e9 // 2, quiverscales['current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top')
 
     if time != None:
         cbarax2.set_title(str(time) + ' UT', fontweight = 'bold')
@@ -812,7 +722,6 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     cbarax2.set_xlabel('mho')
     cbarax2.set_yticks([])
 
-
     # Finish
     # ------
     plt.subplots_adjust(top=0.91, bottom=0.065, left=0.01, right=0.99, hspace=0.1, wspace=0.02) 
@@ -826,6 +735,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     else:
         return fig
 
+'''
 def lompeplot_DF(model, figheight = 9, include_data = False, show_data_location= False, apex = None, time = None, 
                      savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
                      debug = False, return_axes = False):
@@ -1691,7 +1601,8 @@ def lompeplot_decomp_3(model, AiQ, figheight = 18, include_data = False, show_da
     # ---------
     ax = axes[0, 0]
     V = V - V.min() - (V.max() - V.min())/2
-    dV = 5
+    #dV = 5
+    dV = colorscales['dV']
     ax.contour(xi, eta, V, colors='tab:blue', levels=np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV])    
     x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(veCF, vnCF, qlo, qla)    
     kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['convection']}
@@ -1704,7 +1615,8 @@ def lompeplot_decomp_3(model, AiQ, figheight = 18, include_data = False, show_da
     # ---------
     ax = axes[1, 0]
     V = W - W.min() - (W.max() - W.min())/2
-    dV = 1
+    #dV = 1
+    dV = colorscales['dW']
     ax.contour(xi, eta, V, colors='tab:orange', levels=np.r_[(V.min()//dV)*dV :(V.max()//dV)*dV + dV:dV])    
     x, y, Ax, Ay = model.grid_J.projection.vector_cube_projection(veDF, vnDF, qlo, qla)    
     kwargs = {'color':'k', 'zorder':3, 'scale_units':'inches', 'scale':quiverscales['convection_DF']}
@@ -1785,7 +1697,7 @@ def lompeplot_decomp_3(model, AiQ, figheight = 18, include_data = False, show_da
     # Joule (pot)
     # --------------------
     ax = axes[0, 3]
-    ax.contourf(xi, eta, JouleCF, cmap='Oranges', levels=colorscales['joule'])
+    ax.contourf(xi, eta, JouleCF, cmap='PuOr_r', levels=colorscales['joule'])
     ax.set_title('Joule (pot): {}'.format(np.round(np.sum(JouleCF)*1e3, 1)))
     # Joule (ind)
     # --------------------
@@ -1795,7 +1707,7 @@ def lompeplot_decomp_3(model, AiQ, figheight = 18, include_data = False, show_da
     # Joule
     # --------------------
     ax = axes[2, 3]
-    ax.contourf(xi, eta, Joule, cmap='Oranges', levels=colorscales['joule'])
+    ax.contourf(xi, eta, Joule, cmap='PuOr_r', levels=colorscales['joule'])
     ax.set_title('Joule: {}'.format(np.round(np.sum(Joule)*1e3, 1)))
     
     
@@ -1926,6 +1838,7 @@ def lompeplot_decomp_3(model, AiQ, figheight = 18, include_data = False, show_da
         return fig, axes, arrowax, [cbarax1, cbarax2]
     else:
         return fig
+'''
 
 def add_background(ax, xlim, ylim, color='k', alpha=0.8, zorder=-1):
     
@@ -1941,8 +1854,8 @@ def mapPlot(ax, var, grid, model, mapDict=None, includeData=None, JBoundary=None
     
     # Plot grid edge
     if isinstance(JBoundary, dict):
-        ximin, ximax = np.min(model.grid_J.xi), np.max(model.grid_J.xi)
-        etamin, etamax = np.min(model.grid_J.eta), np.max(model.grid_J.eta)
+        ximin, ximax = np.min(model.gH.xi_J), np.max(model.gH.xi_J)
+        etamin, etamax = np.min(model.gH.eta_J), np.max(model.gH.eta_J)
         ax.plot([ximin, ximax], [etamin]*2, **JBoundary)
         ax.plot([ximin, ximax], [etamax]*2, **JBoundary)
         ax.plot([ximin]*2, [etamin, etamax], **JBoundary)
@@ -1959,7 +1872,7 @@ def mapPlot(ax, var, grid, model, mapDict=None, includeData=None, JBoundary=None
             if len(model.data[dtype]) == 0:
                 continue
             for dataset in model.data[dtype]:
-                xi_d, eta_d = model.grid_E.projection.geo2cube(dataset.coords['lon'], dataset.coords['lat'])
+                xi_d, eta_d = model.gH.grid_E.projection.geo2cube(dataset.coords['lon'], dataset.coords['lat'])
                 ax.plot(xi_d, eta_d, color=dcol, label=dtype, **incData)
     
     # Pretty
@@ -1969,6 +1882,7 @@ def mapPlot(ax, var, grid, model, mapDict=None, includeData=None, JBoundary=None
     
     return ax, cc
 
+'''
 def resolutionplot(model, apex=None, savekw = None, return_axes = False,
                    mapDict=None, background=None, JBoundary=None, includeData= None,
                    unit='km', figsize=(20,14), fs=20):
@@ -2478,7 +2392,7 @@ def Cdplot(model, dtype, apex=None, savekw = None, return_axes = False,
         return fig, ax
     else:
         return fig
-    
+'''    
 
 def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)}, 
                            quiverscales=None, perimiter_width=10):
@@ -2512,10 +2426,10 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)},
     """
     
     if quiverscales == None:
-        quiverscales = QUIVERSCALES
+        quiverscales = QUIVERSCALES_CF
     else:
-        QUIVERSCALES.update(quiverscales)
-        quiverscales = QUIVERSCALES    
+        QUIVERSCALES_CF.update(quiverscales)
+        quiverscales = QUIVERSCALES_CF
 
     fig, ax = plt.subplots(**fig_parameters)
 
@@ -2525,24 +2439,24 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)},
         for ds in model.data[dtype]: # loop through the datasets within each data type
 
             # skip data points that are outside biggrid:
-            ds = ds.subset(model.biggrid.ingrid(ds.coords['lon'], ds.coords['lat'], ext_factor=perimiter_width))
-            scaling = QUIVERSCALES[ds.datatype]/2
+            ds = ds.subset(model.gH.grid_d.ingrid(ds.coords['lon'], ds.coords['lat'], ext_factor=perimiter_width))
+            scaling = QUIVERSCALES_CF[ds.datatype]/2
             
             if 'mag' in dtype:
-                Gs = np.split(model.matrix_func[dtype](**ds.coords), 3, axis = 0)
-                Bs = map(lambda G: G.dot(model.m), Gs)
+                Gs = np.split(model.matrix_func_CF.get(dtype)(**ds.coords), 3, axis = 0)
+                Bs = map(lambda G: G.dot(model.m_CF), Gs)
                 for B, d, sym in zip(Bs, ds.values, ['>', '^', 'o']):
                     ax.scatter(d/scaling, B/scaling, marker  = sym, c = 'C' + str(counter), alpha = .7)
 
 
             if (dtype in ['convection', 'efield']):
-                Ge, Gn = model.matrix_func[dtype](**ds.coords)
+                Ge, Gn = model.matrix_func_CF(dtype)(**ds.coords)
 
                 if ds.los is not None: # deal with line of sight data:
                     G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
-                    ax.scatter(ds.values/scaling, G.dot(model.m)/scaling, c = 'C' + str(counter), marker = 'x', zorder = 4, alpha = .7)
+                    ax.scatter(ds.values/scaling, G.dot(model.m_CF)/scaling, c = 'C' + str(counter), marker = 'x', zorder = 4, alpha = .7)
                 if ds.los is None:
-                    Es = [Ge.dot(model.m), Gn.dot(model.m)]
+                    Es = [Ge.dot(model.m_CF), Gn.dot(model.m_CF)]
                     for E, d, sym in zip(Es, ds.values, ['>', '^']):
                         ax.scatter(d/scaling, E/scaling, marker  = sym, c = 'C' + str(counter), zorder = 4, alpha = .7)
 
@@ -2572,7 +2486,7 @@ def model_data_scatterplot(model, fig_parameters = {'figsize':(8, 8)},
     counter = 0
     for dtype in model.data.keys(): # loop through data types
         for ds in model.data[dtype]: # loop through the datasets within each data type
-            scaling = QUIVERSCALES[ds.datatype]/2
+            scaling = QUIVERSCALES_CF[ds.datatype]/2
 
             if 'mag' in dtype:
                 ax.text(extent * (.9 - counter * .05), -extent + .1 + nranges/2, str(int((scaling * nranges * 1e9))) + ' nT', c = 'C' + str(counter), va = 'center', ha = 'right', rotation = 90)

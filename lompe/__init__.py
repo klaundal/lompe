@@ -1,9 +1,13 @@
-from lompe.model import Emodel
-from lompe.model import Data
-from lompe.model import lompeplot, lompeplot_DF, lompeplot_decomp, lompeplot_decomp_2, lompeplot_decomp_3
+from lompe.model.model import Emodel
+from lompe.model.data import Data
+from lompe.model.design import Design
+from lompe.model.gridhandler import GridHandler
+from lompe.model.solver import Solver
+from lompe.model.regularizer import Regularizer
+from lompe.model.evaluator import Evaluator
+from lompe.model.visualization import lompeplot
 from polplot import Polarplot
 from lompe.utils import sunlight
 from lompe.utils import conductance
-from lompe.model import visualization
 from secsy import cubedsphere as cs
 from lompe.utils import load_model, load_grid, save_model
