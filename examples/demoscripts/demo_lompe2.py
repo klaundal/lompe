@@ -82,8 +82,8 @@ for t in tqdm(times[:100], total=len(times[:100])):
     reg = lompe.Regularizer(model.gH, lreg=2)
     model.add_regularization(reg)
 
-    #model.solve_steady_state(lapack_driver='gelsd', cond=None)
-    model.solve_steady_state()
+    model.solve_steady_state(lapack_driver='gelsd', cond=None)
+    #model.solve_steady_state()
     
     savefile = savepath + str(t).replace(' ','_').replace(':','')
     lompe.lompeplot(model, include_data = True, time = t, apex = apex, savekw = {'fname': savefile, 'dpi' : 200})
