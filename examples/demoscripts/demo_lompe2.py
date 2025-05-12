@@ -5,7 +5,10 @@ from lompe.utils.conductance import hardy_EUV
 import apexpy
 import lompe
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 plt.ioff()
+
+#%%
 
 conductance_functions = True
 
@@ -52,77 +55,26 @@ def prepare_data(t0, t1):
     
     return amp_data, sm_data, sd_data
 
-# get figures from entire day and save somewhere
-
 # times during entire day
 times = pd.date_range('2012-04-05 00:00', '2012-04-05 23:59', freq = '3Min')
 DT = timedelta(seconds = 2 * 60) # will select data from +- DT
 
-
 Kp = 4 # for Hardy conductance model
-SH = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, times[0], 'hall'    )
-SP = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, times[0], 'pedersen')
-model = lompe.Emodel(grid, Hall_Pedersen_conductance = (SH, SP))
-
-#%%
-
-t = times[1]
-
-SH = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'hall'    )
-SP = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'pedersen')
-
-model.clear_model(Hall_Pedersen_conductance = (SH, SP)) # reset
-
-amp_data, sm_data, sd_data = prepare_data(t - DT, t + DT)
-
-model.add_data(amp_data, sm_data, sd_data)
-
-reg = lompe.Regularizer(model.gH, lreg=2)
-
-model.add_regularization(reg)
-
-model.solve_steady_state()
-
-'''
-E = model.ev.E()
-
-v = model.ev.v()
-
-J = model.ev.J()
-
-FAC = model.ev.FAC()
-
-joule = model.ev.joule()
-
-Bg = model.ev.B_ground()
-
-Bs = model.ev.B_space()
-
-Bs_FAC = model.ev.B_space_FAC()
-
-Phi = model.ev.Phi()
-
-W = model.ev.W()
-'''
-#%%
-
-lompe.lompeplot(model)
-
-
-
-
-
 
 #%%
     
 # loop through times and save
-for t in times[1:]:
-    print(t)
+plt.ioff()
+model = None
+for t in tqdm(times[:100], total=len(times[:100])):
     
     SH = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'hall'    )
     SP = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'pedersen')
 
-    model.clear_model(Hall_Pedersen_conductance = (SH, SP)) # reset
+    if model is None:
+        model = lompe.Emodel(grid, Hall_Pedersen_conductance = (SH, SP))
+    else:
+        model.clear_model(Hall_Pedersen_conductance = (SH, SP)) # reset
     
     amp_data, sm_data, sd_data = prepare_data(t - DT, t + DT)
     model.add_data(amp_data, sm_data, sd_data)
@@ -134,11 +86,5 @@ for t in times[1:]:
     
     savefile = savepath + str(t).replace(' ','_').replace(':','')
     lompe.lompeplot(model, include_data = True, time = t, apex = apex, savekw = {'fname': savefile, 'dpi' : 200})
-    
-#    gtg, ltl = model.run_inversion(l1 = 2, l2 = 0)
-    
-    #savefile = savepath + str(t).replace(' ','_').replace(':','')
-    #lompe.lompeplot(model, include_data = True, time = t, apex = apex, savekw = {'fname': savefile, 'dpi' : 200})
-
-
-
+    plt.close('all')
+plt.ion()
