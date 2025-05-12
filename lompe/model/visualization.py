@@ -500,7 +500,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
         pax.plot(lat, mlt, color = 'black', linewidth = 1.5 if i == 0 else .5, zorder = 2)
 
     if dV != None: # plot electric potential
-        V = model.Phi().reshape(model.gH.shape_J) * 1e-3
+        V = model.ev.Phi().reshape(model.gH.shape_J) * 1e-3
         V = V - V.min() - (V.max() - V.min())/2
         lat, lon = model.gH.lat_J, model.gH.lon_J
         if not model.dipole:

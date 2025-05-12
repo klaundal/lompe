@@ -127,6 +127,7 @@ class Emodel(object):
         self.reset_regularization()
         self.reset_processed_data()
         self.reset_G()
+        self.reset_evaluator()
         
         if perimeter_width is not None:
             self.change_parimeter_width(perimeter_width)
@@ -380,6 +381,8 @@ class Emodel(object):
             self._ev = Evaluator(self)
         return self._ev
     
+    def reset_evaluator(self):
+        self._ev = None
 
 #%% Old
 '''

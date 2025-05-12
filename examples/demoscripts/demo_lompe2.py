@@ -10,7 +10,7 @@ plt.ioff()
 conductance_functions = True
 
 event = '2012-04-05'
-#savepath = '/Users/amalie/Downloads/demofigs/'
+savepath = '/home/bing/Dropbox/work/temp_storage/Lompe_demo_figs/'
 apex = apexpy.Apex(int(event[0:4]), refh = 110)
 
 supermagfn = '/home/bing/Dropbox/work/code/repos/lompe/examples/sample_dataset/20120405_supermag.h5'
@@ -63,6 +63,8 @@ Kp = 4 # for Hardy conductance model
 SH = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, times[0], 'hall'    )
 SP = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, times[0], 'pedersen')
 model = lompe.Emodel(grid, Hall_Pedersen_conductance = (SH, SP))
+
+#%%
 
 t = times[1]
 
@@ -123,13 +125,20 @@ for t in times[1:]:
     model.clear_model(Hall_Pedersen_conductance = (SH, SP)) # reset
     
     amp_data, sm_data, sd_data = prepare_data(t - DT, t + DT)
-    
     model.add_data(amp_data, sm_data, sd_data)
 
-    gtg, ltl = model.run_inversion(l1 = 2, l2 = 0)
+    reg = lompe.Regularizer(model.gH, lreg=2)
+    model.add_regularization(reg)
+
+    model.solve_steady_state()
     
     savefile = savepath + str(t).replace(' ','_').replace(':','')
     lompe.lompeplot(model, include_data = True, time = t, apex = apex, savekw = {'fname': savefile, 'dpi' : 200})
+    
+#    gtg, ltl = model.run_inversion(l1 = 2, l2 = 0)
+    
+    #savefile = savepath + str(t).replace(' ','_').replace(':','')
+    #lompe.lompeplot(model, include_data = True, time = t, apex = apex, savekw = {'fname': savefile, 'dpi' : 200})
 
 
 
