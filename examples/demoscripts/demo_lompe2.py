@@ -13,7 +13,7 @@ plt.ioff()
 conductance_functions = True
 
 event = '2012-04-05'
-savepath = '/home/bing/Dropbox/work/temp_storage/Lompe_demo_figs/'
+savepath = '/home/bing/Dropbox/work/temp_storage/Lompe2_demo_figs/'
 apex = apexpy.Apex(int(event[0:4]), refh = 110)
 
 supermagfn = '/home/bing/Dropbox/work/code/repos/lompe/examples/sample_dataset/20120405_supermag.h5'
@@ -82,6 +82,7 @@ for t in tqdm(times[:100], total=len(times[:100])):
     reg = lompe.Regularizer(model.gH, lreg=2)
     model.add_regularization(reg)
 
+    #model.solve_steady_state(lapack_driver='gelsd', cond=None)
     model.solve_steady_state()
     
     savefile = savepath + str(t).replace(' ','_').replace(':','')
