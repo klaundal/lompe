@@ -16,7 +16,7 @@ class ArgumentError(Exception):
 
 
 class Data(object):
-    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, scale = None, iweight = None, error = 0):
+    def __init__(self, values, coordinates = None, LOS = None, components = 'all', datatype = 'none', label = None, iweight = None, error = 0):
         """ 
         Initialize Data object that can be passed to the Emodel.add_data function. 
 
@@ -112,11 +112,6 @@ class Data(object):
             0, 1, or 2 to specify which one: 0 is east, 1 is north, and 2 is up. If 
             two components are included, set to a list of ints (e.g. [0, 2] for east
             and up). NOTE: If LOS is set, this keyword is ignored
-        scale: float, optional
-            DEPRECATED. Use iweight and error instead. Previous description:
-            set to a typical scale for the data, in SI units. For example, convection could be
-            typically 100 [m/s], and magnetic field 100e-9 [T]. If not set, a default value is
-            used for each dataset.
         iweight: float, optional
             importance weight of the data ranging from 0 to 1. For example, since ground 
             magnetometer measurements can only indirectly influence the calculation of 
@@ -142,8 +137,6 @@ class Data(object):
 
         errors = {'ground_mag':10e-9, 'space_mag_full':30e-9, 'space_mag_fac':30e-9, 'convection':50, 'efield':3e-3, 'fac':1e-6}
         iweights = {'ground_mag':0.5, 'space_mag_full':0.5, 'space_mag_fac':0.5, 'convection':1.0, 'efield':1.0, 'fac':1.0}
-
-        assert scale is None,"'scale' keyword is deprecated! Please use 'iweight' (\"importance weight\") instead"
 
         if np.array(error).size == 1:
             if error == 0:

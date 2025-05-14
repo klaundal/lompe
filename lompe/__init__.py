@@ -1,5 +1,6 @@
 from lompe.model.model import Emodel
 from lompe.model.data import Data
+from lompe.model.timeseries import TimeSeries
 from lompe.model.design import Design
 from lompe.model.gridhandler import GridHandler
 from lompe.model.solver import Solver

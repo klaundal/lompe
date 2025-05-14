@@ -4,6 +4,10 @@ from .design import Design
 from .gridhandler import GridHandler
 from .solver import Solver
 from .evaluator import Evaluator
+from .regularizer import Regularizer
+from .timeseries import TimeSeries
+from typing import Union, Optional, Tuple, Callable
+from tqdm import tqdm
 
 #%%
 
@@ -13,13 +17,15 @@ RE = 6371.2e3 # Earth radius in meters
 
 class Emodel(object):
     def __init__(self, grid,
-                       Hall_Pedersen_conductance,
-                       epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
-                       dipole = False, # set to True to use dipole field and dipole coords
-                       perfect_conductor_radius = None,
-                       ew_regularization_limit = None,
-                       perimeter_width=10,
-                       data_density_weight=True):
+                       Hall_Pedersen_conductance: Optional[Union[Tuple[Callable, Callable]]] = None,
+                       Hall_Pedersen_conductance_t: Optional[list[Tuple[Callable, Callable]]] = None,
+                       times: Optional[Union[list[int], list[float], int, float]] = None,
+                       epoch: Optional[Union[int, float]] = 2015., # epoch, decimal year, used for IGRF dependent calculations
+                       dipole: Optional[bool] = False, # set to True to use dipole field and dipole coords
+                       perfect_conductor_radius: Optional[float] = None,
+                       ew_regularization_limit: Optional[Tuple[Union[int, float], Union[int, float]]] = None,
+                       perimeter_width: Optional[int] = 10,
+                       data_density_weight: Optional[bool] =True):
         """
         Electric field model
 
@@ -60,45 +66,85 @@ class Emodel(object):
             reduced to zero towards the magnetic pole. The motivation for this is that east-west 
             regularization is not appropriate in the polar cap, and it might be better to turn it off there
         """
-        # options
+        # Check is time-dependent modeling is expected
+        if Hall_Pedersen_conductance is None and Hall_Pedersen_conductance_t is None:
+            raise ValueError('Hall_Pedersen_conductance and Hall_Pedersen_conductance_t cannot both be None.')
+        if Hall_Pedersen_conductance is not None and Hall_Pedersen_conductance_t is not None:
+            raise ValueError('Hall_Pedersen_conductance and Hall_Pedersen_conductance_t cannot both be defined.')        
+        if Hall_Pedersen_conductance_t is None:
+            self.time_dependent_modeling = False
+        else:
+            self.time_dependent_modeling = True
+        
+        # Various global parameters
         self.perfect_conductor_radius = perfect_conductor_radius
         self.dipole = dipole
         self.epoch = epoch
         self.use_gpu = False
         self.perimeter_width=perimeter_width
+        
+        # Calculate spatial weights
         self.data_density_weight = data_density_weight
         
+        # Steady-state conductance functions
+        self.hall_conductance = None
+        self.pedersen_conductance = None
+        
+        # Time-dependent conductance functions
+        self.ntc = None
+        self.timesc = None
+        self.hall_conductance_t = None
+        self.pedersen_conductance_t = None
+        
+        # various Lompe classes
         self._builder = None
         self._solver = None
         self._ev = None
+        self.gH = GridHandler(grid)
 
+        # Regularization
         self.reg = None
-                
+        
+        # Design matrices
         self._G_CF = None
         self._G_DF = None
         
+        # Data
         self.data = {'efield':[], 'convection':[], 'ground_mag':[], 'space_mag_full':[], 'space_mag_fac':[], 'fac':[]}
+        self.timeseries = {'efield':[], 'convection':[], 'ground_mag':[], 'space_mag_full':[], 'space_mag_fac':[], 'fac':[]}
         self._d = None
         
+        # Data weights
         self._w = None
         self._sw = None
         self._iweight = None
         self._Cdinv = None
         
+        # Epot and Eind model parameters
         self.m_CF = None
         self.m_DF = None
+        self.m_CF_t = None
+        self.m_DF_t = None
+        self.timesm = None # Array of time were the model will be evaluated
         
+        # Posterior coviariance matrix
+        # TODO: Introduce Cmpost_CF and Cmpost_DF
         self.Cmpost = None
         
-        # Initiate grid handler
-        self.gH = GridHandler(grid)
-        
         # Define conductance functions and initiate Desgin
-        self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance)
+        self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance,
+                         Hall_Pedersen_conductance_t = Hall_Pedersen_conductance_t,
+                         times = times,
+                         perimeter_width=self.perimeter_width)
       
 #%% Utils
 
-    def clear_model(self, Hall_Pedersen_conductance = None, perimeter_width=None):
+    def clear_model(self, 
+                    Hall_Pedersen_conductance: Optional[Tuple[Callable, Callable]] = None, 
+                    Hall_Pedersen_conductance_t: Optional[list[Tuple[Callable, Callable]]] = None,
+                    times: Optional[Union[list[int], list[float], int, float]] = None,
+                    perimeter_width: Optional[int] = None,
+                    reset_reg: bool = True):
         """ Reset data and model vectors
 
         parameters
@@ -112,19 +158,35 @@ class Emodel(object):
         self.m_DF = None
 
         # dictionary of lists to store datasets in
-        self.data = {'efield':[], 'convection':[], 'ground_mag':[], 'space_mag_full':[], 'space_mag_fac':[], 'fac':[]}
+        self.reset_data()
 
-        # Hall and Pedersen conductance - either inversion or functions:
-        if Hall_Pedersen_conductance != None:
-
-            _h, _p = Hall_Pedersen_conductance
-            
+        # Hall and Pedersen conductance functions:
+        if Hall_Pedersen_conductance is not None:
+            _h, _p = Hall_Pedersen_conductance            
             self.hall_conductance     = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat: _h(lon, lat)
             self.pedersen_conductance = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat: _p(lon, lat)
+        
+        # Multiple Hall and Pedersen conductance functions for time-dependent modeling:
+        if Hall_Pedersen_conductance_t is not None:
+            self.ntc = len(Hall_Pedersen_conductance_t)
+            self.hall_conductance_t = [None]*self.ntc
+            self.pedersen_conductance_t = [None]*self.ntc
+            for i, (_h, _p) in enumerate(Hall_Pedersen_conductance_t):
+                self.hall_conductance_t[i]     = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat: _h(lon, lat)
+                self.pedersen_conductance_t[i] = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat: _p(lon, lat)
+        
+            # Only do anything with conductance time if t conductance is changed
+            if times is None:
+                self.timesc = list(np.arange(self.ntc))
+            elif isinstance(times, list):
+                self.timesc = times
+            else:
+                self.timesc = np.arange(0, self.ntc*times, times)            
 
         self.reset_builder()
         self.reset_solver()
-        self.reset_regularization()
+        if reset_reg:
+            self.reset_regularization()
         self.reset_processed_data()
         self.reset_G()
         self.reset_evaluator()
@@ -251,6 +313,7 @@ class Emodel(object):
                     self._sw = np.hstack((self._sw, spatial_weight))
                     self._iweight = np.hstack((self._iweight, np.ones(ds.values.size)*iweights[ii]))
                     self._Cdinv = np.hstack((self._Cdinv, 1/(error**2)))
+                    ii += 1
         self._w = self._sw * self._iweight * self._Cdinv # Combined error
 
     def change_parimeter_width(self, perimeter_width=10):
@@ -260,13 +323,48 @@ class Emodel(object):
             self.perimeter_width = perimeter_width
             self.gH.grid_d = None
             self.reset_processed_data()
-                
+    
+    def reset_data(self):
+        self.data = {'efield':[], 'convection':[], 'ground_mag':[], 'space_mag_full':[], 'space_mag_fac':[], 'fac':[]}
+    
     def reset_processed_data(self):
         self._d = None
         self._sw = None
         self._iweight = None
         self._Cdinv = None
         self._w = None
+
+#%% TimeSeries
+
+    def add_timeseries(self, 
+                       *tseriess: TimeSeries):
+        for tseries in tseriess:
+            for dataset in tseries.data:
+                if not dataset.isvalid:
+                    raise Exception('invalid dataset')
+
+            dtype = tseries.datatype.lower()
+
+            if dtype in self.timeseries.keys():
+                self.timeseries[dtype].append(tseries)
+            else:
+                print('You passed {}, which is not in {} - ignored'.format(dtype, list(self.tseries.keys())))
+
+    def get_t_subsets(self, 
+                      t: Union[int, float],
+                      reset: bool = True):
+        
+        if reset: # These will also be reset if self.clear_model() is used
+            self.reset_data()
+            self.reset_processed_data()
+        
+        for dtype in self.timeseries.keys(): # loop through data types            
+            for timeseries in self.timeseries[dtype]: # loop through the datasets within each data type
+                # Fetch and add desired time-steps
+                self.add_data(timeseries.get_t_subset(t))
+
+    def reset_timeseries(self):
+        self.timeseries = {'efield':[], 'convection':[], 'ground_mag':[], 'space_mag_full':[], 'space_mag_fac':[], 'fac':[]}
 
 #%% Forward problem
 
@@ -341,7 +439,9 @@ class Emodel(object):
 
 #%% Regularization
 
-    def add_regularization(self, *reg, append=False):
+    def add_regularization(self, 
+                           *reg: Regularizer, 
+                           append: bool = False):
         if append and self.reg is not None:
             self.reg += reg
         else:
@@ -372,6 +472,32 @@ class Emodel(object):
     
     def reset_solver(self):
         self._solver = None
+
+#%% Inverse problem - Steady-state - Timeseries
+
+    def solve_multiple_steady_state(self, times, **kwargs):
+        # We need some time steps if data is not given on equal time steps
+        self.timesm = times        
+        self.ntm = len(self.timesm)
+        self.m_CF_t = [None]*self.ntm
+        
+        desc = kwargs.pop('desc', 'SS solver')
+        for i, t in tqdm(enumerate(self.timesm), total=self.ntm, desc=desc):
+            # Fetch conductance first as many things (including data) will be reset.
+            # Define conductance for t
+            tid = np.argmin(np.array(self.timesc) - t)
+            self.clear_model(Hall_Pedersen_conductance = (self.hall_conductance_t[tid], self.pedersen_conductance_t[tid]),
+                             reset_reg = False)
+            
+            # Get data at t
+            self.get_t_subsets(t)
+            
+            # Run solver
+            self.solve_steady_state(**kwargs)
+            
+            self.m_CF_t[i] = self.m_CF
+        
+        self.m_CF = None        
 
 #%% Evaluator
 
