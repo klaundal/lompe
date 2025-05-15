@@ -120,6 +120,10 @@ class Emodel(object):
         self._iweight = None
         self._Cdinv = None
         
+        # Kalman
+        self.nta = None
+        self.A = None
+        
         # Epot and Eind model parameters
         self.m_CF = None
         self.m_DF = None
@@ -171,9 +175,9 @@ class Emodel(object):
             self.ntc = len(Hall_Pedersen_conductance_t)
             self.hall_conductance_t = [None]*self.ntc
             self.pedersen_conductance_t = [None]*self.ntc
-            for i, (_h, _p) in enumerate(Hall_Pedersen_conductance_t):
-                self.hall_conductance_t[i]     = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat: _h(lon, lat)
-                self.pedersen_conductance_t[i] = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat: _p(lon, lat)
+            for i, (h, p) in enumerate(Hall_Pedersen_conductance_t):
+                self.hall_conductance_t[i]     = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat, _h=h: _h(lon, lat)
+                self.pedersen_conductance_t[i] = lambda lon = self.gH.grid_J.lon, lat = self.gH.grid_J.lat, _p=p: _p(lon, lat)
         
             # Only do anything with conductance time if t conductance is changed
             if times is None:
@@ -350,7 +354,7 @@ class Emodel(object):
             else:
                 print('You passed {}, which is not in {} - ignored'.format(dtype, list(self.tseries.keys())))
 
-    def get_t_subsets(self, 
+    def add_timeseries_subset(self, 
                       t: Union[int, float],
                       reset: bool = True):
         
@@ -483,14 +487,15 @@ class Emodel(object):
         
         desc = kwargs.pop('desc', 'SS solver')
         for i, t in tqdm(enumerate(self.timesm), total=self.ntm, desc=desc):
+
             # Fetch conductance first as many things (including data) will be reset.
             # Define conductance for t
-            tid = np.argmin(np.array(self.timesc) - t)
+            tid = np.argmin(abs(np.array(self.timesc) - t))
             self.clear_model(Hall_Pedersen_conductance = (self.hall_conductance_t[tid], self.pedersen_conductance_t[tid]),
                              reset_reg = False)
             
             # Get data at t
-            self.get_t_subsets(t)
+            self.add_timeseries_subset(t)
             
             # Run solver
             self.solve_steady_state(**kwargs)
@@ -498,6 +503,353 @@ class Emodel(object):
             self.m_CF_t[i] = self.m_CF
         
         self.m_CF = None        
+
+#%% Inverse problem - Kalman
+
+    def add_dynamic_model_func(self, 
+                               A: Union[np.ndarray, list[np.ndarray]]):
+        
+        if isinstance(A, list) and len(A[0].shape) == 2:
+            self.nta = len(A)
+            self.A = A
+        elif len(A.shape) == 3:
+            self.nta = A.shape[0]
+            self.A = [A[i] for i in range(self.nta)]
+        elif len(A.shape) == 2:
+            self.A = A
+        else:
+            raise ValueError('A has to be: 1) list of 2D arrays. 2) 2D np.ndarray. 3) 3D np.ndarray')
+
+    def get_SS(self, 
+               times: Union[list[int], list[float]], 
+               **kwargs):
+        
+        self.solve_multiple_steady_state(times, **kwargs)
+        self.m_CF_SS = self.m_CF_t
+        self.m_CF_t = None
+
+    def estimate_Q(self,
+                   times: Optional[Union[list[int], list[float]]] = None,
+                   **kwargs):
+        
+        if self.A is None:
+            raise ValueError('No dynamic model function added!')
+        else:
+            if times is not None and isinstance(self.A, list):
+                if len(times) != len(self.A):
+                    raise ValueError('A and time have to have the same length')
+                        
+        if self.m_CF_SS is None:
+            if times is None:
+                raise ValueError('Either run get_SS() or define times.')
+            self.get_SS(times, **kwargs)
+            
+        rmstp = []
+        for i in range(2, self.ntm):
+            if isinstance(self.A, list):
+                Ai = self.A[i]
+            else:
+                Ai = self.A
+            
+            rmstp.append(self.m_CF_SS[i] - Ai.dot(np.hstack((self.m_CF_SS[i-1], self.m_CF_SS[i-2]))))
+        
+        rmstp = np.vstack(rmstp).T
+        self.Q_est = rmstp.dot(rmstp.T) / rmstp.shape[1]
+
+    def something():
+        # Area of the mesh grid cells
+        A = grid_E.A.flatten()
+
+        # Curl relation of the DF SECS
+        Q = np.eye(grid_E.size) - A.dot(np.full((grid_E.size, grid_E.size), 1 / (4 * np.pi * grid_E.R**2)))
+
+        G = -dt * np.diag(1/A).dot(Q)
+        
+        Bc = dcopy(G)
+        
+        ## Br from potential E
+        SH, SP = get_c(grid_big.lat, grid_big.lon, t)
+        SH = SH.reshape(-1, 1)
+        SP = SP.reshape(-1, 1)
+        Bs = calc_G_r_CF_s2b(SH, SP)
+        Bs = recond(Bs, cond=1e3, inflate=True) ## 1
+        
+        Bcd = scipy.linalg.lstsq(Bc.T.dot(Bc), Bc.T.dot(Bs))[0]
+
+    def solve_kalman(self,
+                     A=None,
+                     times=None,
+                     Q_est=None,
+                     mst=None,
+                     mstn=None,
+                     Pst=None,
+                     Pstn=None,
+                     **kwargs):
+        # Check if the dynamic model function is defined
+        if self.A is None and A is None:
+            raise ValueError('The dynamic model function needs to be defined')
+        
+        if A is not None:
+            self.add_dynamic_model_func(A)
+        
+        if Q_est is None:
+            self.estiamte_Q(times, **kwargs)
+
+        self.n_CF = self.gH.size_E
+        
+        # Allocate space
+        mss = np.zeros((self.n_CF, self.ntm))
+        Pss = np.zeros((self.n_CF, self.n_CF, self.ntm))
+
+        mcs = np.zeros((self.n_CF, self.ntm))
+        Pcs = np.zeros((self.n_CF, self.n_CF, self.ntm))
+
+        if mst is None:
+            self.mst = self.m_CF_SS[0]
+        else:
+            self.mst = mst # Init
+        
+        if mst is None:
+            self.mstn = self.m_CF_SS[0]
+        else:
+            self.mstn = mstn
+
+        self.Pst = Pst
+        self.Pstn = Pst
+
+        weights_all = []
+        for i, t in tqdm(enumerate(self.timesm), total=self.ntm, desc='Kalman Filter'):
+            
+            # Fetch conductance first as many things (including data) will be reset.
+            # Define conductance for t
+            tid = np.argmin(abs(np.array(self.timesc) - t))
+            self.clear_model(Hall_Pedersen_conductance = (self.hall_conductance_t[tid], self.pedersen_conductance_t[tid]),
+                             reset_reg = False)
+            
+            ################### Predict ###################
+            # Initiate Kalman filter, predict step is the same for all
+            kf = self.KF()
+            if isinstance(self.A, list):
+                kf.predict(self.A[i], self.mst, self.mstn, self.Pst, self.Pstn)
+            else:
+                kf.predict(self.A, self.mst, self.mstn, self.Pst, self.Pstn)
+            
+            ################### Update ###################
+            # Update filter for each dataset.
+            kf_m, kf_P = [], []
+            for dtype in self.timeseries.keys(): # loop through data types            
+                for timeseries in self.timeseries[dtype]: # loop through the datasets within each data type
+                    # Fetch and add desired time-steps
+                    self.clear_data()
+                    self.clear_processed_data()
+                    self.add_data(timeseries.get_t_subset(t))
+                    
+                    self.G_CF
+                    self.G_DF
+                    
+                    Hcs = self.G_DF.dot(Bcd)
+                    H = self.G_CF + Hcs
+                    d_p = self.d + Hcs.self.mst
+                    del Hcs
+                    
+                    kf.update(H, self.Q_est, np.diag(1/self.w), d_p)
+                    kf_m.append(kf.m)
+                    kf_P.append(kf.P)
+            
+            ################### Fuse modules ###################
+            weights = np.array([1/np.trace(P) for P in kf_P])
+            weights /= weights.sum()  # Normalize weights
+            weights_all.append(weights) # Save for curious people
+    
+            mstp = np.sum([w*m for w, m in zip(weights, kf_m)])            
+            P_inv_sum = np.sum([w*np.linalg.pinv(P) for w, P in zip(weights, kf_P)])
+            Pstp = np.linalg.pinv(P_inv_sum)
+            del kf_m, kf_P, P_inv_sum, weights
+    
+            ################### Extract ###################
+
+            # Calculate Cstp
+            mctp = Bcd.dot(mstp - mst)
+    
+            Pctp = Bcd.dot(Pstp + Pst).dot(Bcd.T)
+    
+            ################### Save ###################
+            self.mss[:, i] = mstp
+            self.Pss[:, :, i] = Pstp
+            
+            self.mcs[:, i] = mctp
+            self.Pcs[:, :, i] = Pctp
+    
+            self.mstn = dcopy(self.mst)
+            self.mst = dcopy(self.mstp)
+    
+            self.Pstn = dcopy(self.Pst)
+            self.Pst = dcopy(self.Pstp)
+        
+
+
+
+
+
+
+    def solve_kalman(self):
+        
+        # Allocate space
+        mss = np.zeros((n_CF, nt))
+        Pss = np.zeros((n_CF, n_CF, nt))
+
+        mcs = np.zeros((n_CF, nt))
+        Pcs = np.zeros((n_CF, n_CF, nt))
+
+        mst = dcopy(m0_CF)
+        mstn = dcopy(m0_CF)
+
+        Pst = dcopy(C0_CF)
+        Pstn = dcopy(C0_CF)
+
+        lreg=2e0
+
+        weights_all = []
+        model = None
+        for i, start in tqdm(enumerate(times), total=nt, desc='Kalman Filter'):
+            # Define end of window
+            end = start + window_size_almost
+    
+            # Define time in seconds from start for spline model
+            t = (start - t0).seconds
+
+            # Make conductance functions
+            def SH(lon, lat):
+                H, P = get_c(lat, lon, t)
+                return H
+            def SP(lon, lat):
+                H, P = get_c(lat, lon, t)
+                return P
+    
+            # Get forward matrices
+            ## delta Br from induction E
+            Bc = dcopy(G)
+    
+            ## Br from potential E
+            SH, SP = get_c(grid_big.lat, grid_big.lon, t)
+            SH = SH.reshape(-1, 1)
+            SP = SP.reshape(-1, 1)
+            Bs = calc_G_r_CF_s2b(SH, SP)
+            Bs = recond(Bs, cond=1e3, inflate=True) ## 1
+        
+            ################### Update - prep ###################
+    
+            Bcd = scipy.linalg.lstsq(Bc.T.dot(Bc), Bc.T.dot(Bs))[0]
+    
+            filters = []
+            ## Data B
+            # Extract subset of data
+            df_smi = df_sm.loc[start:end]
+
+            # Add measurements - Supermag
+            f = grid.ingrid(df_smi['lon'], df_smi['lat'])
+            coords = np.vstack((df_smi['lon'][f], df_smi['lat'][f], np.ones(np.sum(f))*6371.2e3))
+            B = np.vstack((df_smi['Be'][f], df_smi['Bn'][f], df_smi['Bu'][f]))*1e-9
+            error = 10*1e-9
+            data = lompe.Data(B, coords, datatype='ground_mag', iweight= 1, error=error)
+    
+            if model is None:
+                model = lompe.Emodel(grid, Hall_Pedersen_conductance = (SH_fun, SP_fun))
+            else:
+                model.clear_model(Hall_Pedersen_conductance = (SH_fun, SP_fun)) # reset
+    
+            model.add_data(data)
+            model.get_G_CF()
+            model.get_G_DF()
+            d = model._d
+            R_inv = model._w
+            H = model.G_CF + 0
+            R = np.linalg.inv(np.diag(R_inv))
+            Hs = model.G_CF + 0
+            Hc = model.G_DF + 0
+            Hcs = Hc.dot(Bcd)
+            H = Hs + Hcs
+            d_p = d + Hcs.dot(mst)
+    
+            kf1 = KF.KalmanFilter(H, Q_est, R, Pst, Pstn, mst, mstn)
+            kf1.predict()
+            #kf1.update_MC(d_p, reg=1e0)
+            kf1.update_MC(d_p, reg=lreg)
+            filters.append(kf1)
+        
+            ## Data dB
+            # Extract subset of data
+            df_sm_dbi = df_sm_db.loc[start:end]
+    
+            # Add measurements - Supermag
+            f = grid.ingrid(df_sm_dbi['lon'], df_sm_dbi['lat'])
+            coords = np.vstack((df_sm_dbi['lon'][f], df_sm_dbi['lat'][f], np.ones(np.sum(f))*6371.2e3))
+            B = np.vstack((df_sm_dbi['dBe_pred'][f], df_sm_dbi['dBn_pred'][f], df_sm_dbi['dBu_pred'][f]))*1e-9
+            error = 10*1e-9
+            data = lompe.Data(B, coords, datatype='ground_mag', iweight= 1, error=error)
+    
+            model.clear_model(Hall_Pedersen_conductance = (SH_fun, SP_fun)) # reset
+            
+            model.add_data(data)
+            model.get_G_CF()
+            model.get_G_DF()
+            d = model._d
+            R_inv = model._w
+            R = np.linalg.inv(np.diag(R_inv))
+            _, _, Gu = get_SECS_B_G_matrices(grid_E.lat.flatten(), grid_E.lon.flatten(), np.ones(grid_E.size)*model.R,
+                                             grid.lat.flatten(), grid.lon.flatten())
+            Grd = lstsq_inv(Gu.T.dot(Gu), var2=Gu.T)
+            Ge, Gn, Gu = get_SECS_B_G_matrices(data.coords['lat'], data.coords['lon'], np.ones(data.coords['lat'].size)*6371000,
+                                               grid.lat.flatten(), grid.lon.flatten())
+            Gg = np.vstack((Ge, Gn, Gu))
+            
+            Hcs = Gg.dot(Grd).dot(Bs)
+            Hcs /= dt # Go from T/s to T/dt
+            d_p = d + Hcs.dot(mst)
+    
+            kf2 = KF.KalmanFilter(Hcs, Q_est, R, Pst, Pstn, mst, mstn)
+            kf2.predict()
+            #kf2.update_MC(d_p, reg=1e0)
+            kf2.update_MC(d_p, reg=lreg)
+            filters.append(kf2)
+    
+            ################### Fuse modules ###################
+            uncertainties = np.zeros(len(filters))
+            for j, kf in enumerate(filters):
+                uncertainties[j] = np.trace(kf.P)
+
+            weights = 1 / uncertainties
+            weights /= weights.sum()  # Normalize weights
+            weights_all.append(weights)
+    
+            mstp = np.zeros(n_CF)
+            P_inv_sum = np.zeros((n_CF, n_CF)) 
+            for w, kf in zip(weights, filters):
+                mstp += w*kf.x
+                P_inv_sum += w*lstsq_inv(kf.P)
+    
+            Pstp = np.linalg.inv(P_inv_sum)    
+    
+            ################### Extract ###################
+
+            # Calculate Cstp
+            mctp = Bcd.dot(mstp - mst)
+    
+            Pctp = Bcd.dot(Pstp + Pst).dot(Bcd.T)
+    
+            ################### Save ###################
+            mss[:, i] = mstp
+            Pss[:, :, i] = Pstp
+            
+            mcs[:, i] = mctp
+            Pcs[:, :, i] = Pctp
+    
+            mstn = dcopy(mst)
+            mst = dcopy(mstp)
+    
+            Pstn = dcopy(Pst)
+            Pst = dcopy(Pstp)
+        
 
 #%% Evaluator
 

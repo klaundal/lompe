@@ -82,7 +82,7 @@ class TimeSeries(object):
         if t > np.max(self.times):
             tid = self.nt-1
         
-        tid = np.argmin(np.array(self.times) - t)
+        tid = np.argmin(abs(np.array(self.times) - t))
         
         return self.data[tid]
 

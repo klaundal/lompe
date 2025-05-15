@@ -36,7 +36,7 @@ grid = lompe.cs.CSgrid(lompe.cs.CSprojection(position, orientation), L, W, Lres,
 
 #%% Constant used for conductance model
 
-Kp = 4 # for Hardy conductance model
+Kp = 5 # for Hardy conductance model
 
 #%% Function for generating Lompe data object
 
@@ -64,7 +64,6 @@ def prepare_data_am(t0, t1):
     amp = ampere[(ampere.time >= t0) & (ampere.time <= t1)]
     B = np.vstack((amp.B_e.values, amp.B_n.values, amp.B_r.values))
     coords = np.vstack((amp.lon.values, amp.lat.values, amp.r.values))
-    #amp_data = lompe.Data(B * 1e-9, coords, datatype = 'space_mag_fac', error = 30e-9, iweight=1.0)    
     return B*1e-9, coords
 
 #%% Defining time windows for the model.
@@ -98,8 +97,8 @@ for t in tqdm(times, total=len(times)):
     sd_los.append(d[2])
     
     # conductance
-    SHP_t.append((lambda lon = grid.lon, lat = grid.lat, _t=t: hardy_EUV(lon, lat, 5, _t, 'hall'    ),
-                  lambda lon = grid.lon, lat = grid.lat, _t=t: hardy_EUV(lon, lat, 5, _t, 'pedersen')))
+    SHP_t.append((lambda lon = grid.lon, lat = grid.lat, _Kp=Kp, _t=t: hardy_EUV(lon, lat, _Kp, _t, 'hall'    ),
+                  lambda lon = grid.lon, lat = grid.lat, _Kp=Kp, _t=t: hardy_EUV(lon, lat, _Kp, _t, 'pedersen')))
 
 del d, t
 
@@ -107,10 +106,10 @@ sm_t = lompe.TimeSeries(values=sm_var, coordinates=sm_coo,
                         times=ts, datatype='ground_mag', error=10e-9, iweight=0.4)
 
 am_t = lompe.TimeSeries(values=am_var, coordinates=am_coo, 
-                        times=ts, datatype='space_mag_fac', error=30e-9, iweight=1)
+                        times=ts, datatype='space_mag_fac', error=30e-9, iweight=1.0)
 
 sd_t = lompe.TimeSeries(values=sd_var, coordinates=sd_coo, LOS=sd_los,
-                        times=ts, datatype='convection', error=50, iweight=1)
+                        times=ts, datatype='convection', error=50, iweight=1.0)
 
 del sm_var, sm_coo, am_var, am_coo, sd_var, sd_coo, sd_los
 
@@ -133,13 +132,11 @@ model.solve_multiple_steady_state(times=ts, lapack_driver='gelsd', cond=None)
 # loop through times and save
 plt.ioff()
 for i, t in tqdm(enumerate(times), total=len(times)):
-    
-    # Define conductance functions
-    SH = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'hall'    )
-    SP = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'pedersen')
 
     # Initiate or clear Lompe model object
-    model.clear_model(Hall_Pedersen_conductance = (SH, SP)) # reset
+    model.clear_model(Hall_Pedersen_conductance = SHP_t[i]) # reset
+    
+    model.add_timeseries_subset(ts[i])
     
     # Run Lompe steady state solver
     model.m_CF = model.m_CF_t[i]

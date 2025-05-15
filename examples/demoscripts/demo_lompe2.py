@@ -36,7 +36,7 @@ grid = lompe.cs.CSgrid(lompe.cs.CSprojection(position, orientation), L, W, Lres,
 
 #%% Constant used for conductance model
 
-Kp = 4 # for Hardy conductance model
+Kp = 5 # for Hardy conductance model
 
 #%% Function for generating Lompe data object
 
@@ -71,16 +71,17 @@ def prepare_data(t0, t1):
 times = pd.date_range(str(supermag.index[0]), str(supermag.index[-1]), freq = '3Min')
 DT = timedelta(seconds = 2 * 60) # will select data from +- DT
 
+times = times[:100]
+
 #%% Loop over all data and make steady-state model
     
 # loop through times and save
 plt.ioff()
 model = None
-for t in tqdm(times[:100], total=len(times[:100])):
-    
+for t in tqdm(times, total=len(times)):
     # Define conductance functions
-    SH = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'hall'    )
-    SP = lambda lon = grid.lon, lat = grid.lat: hardy_EUV(lon, lat, 5, t, 'pedersen')
+    SH = lambda lon = grid.lon, lat = grid.lat, _Kp=Kp, _t=t: hardy_EUV(lon, lat, _Kp, _t, 'hall'    )
+    SP = lambda lon = grid.lon, lat = grid.lat, _Kp=Kp, _t=t: hardy_EUV(lon, lat, _Kp, _t, 'pedersen')
 
     # Initiate or clear Lompe model object
     if model is None:
