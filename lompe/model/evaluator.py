@@ -34,7 +34,8 @@ class Evaluator(object):
             'potential':        self.Phi,
             'stream':           self.W,
             'hall':             self.builder.hall_conductance,
-            'pedersen':         self.builder.pedersen_conductance
+            'pedersen':         self.builder.pedersen_conductance,
+            'dbrdt':            self.dBrdt
             }
 
 #%% Electric field
@@ -151,6 +152,11 @@ class Evaluator(object):
         Be, Bn, Bu = np.split(np.ravel(BBB.dot(self.m_DF)), 3)
 
         return Be.reshape(shape), Bn.reshape(shape), Bu.reshape(shape)
+
+#%% dBrdt
+
+    def dBrdt(self):
+        return self.builder.dBrdt_matrix().dot(self.m_DF).reshape(self.gH.shape_E)
 
 #%% Space magnetic field
 
@@ -304,7 +310,7 @@ class Evaluator(object):
         else:
             cf = _get_variable(self.FAC_CF)
             df = _get_variable(self.FAC_DF)
-            result = tuple(c + d for c, d in zip(cf, df))            
+            result = cf + df
         return result
 
     @check_input
@@ -376,8 +382,8 @@ class Evaluator(object):
         return ju.reshape(shape)
 
 #%% Joule heating
-    #@check_input    
-    def joule(self, lon = None, lat = None):
+    @check_input    
+    def joule(self, lon = None, lat = None, comp=None):
         
         joule_CF = None
         joule_x  = None
@@ -390,8 +396,17 @@ class Evaluator(object):
             Ee_DF, En_DF = self.E(lon, lat, comp='DF')
             joule_x = 2 * SP * (Ee_CF*Ee_DF + En_CF*En_DF)
             joule_DF = SP * (Ee_DF**2 + En_DF**2)
-                    
-        return joule_CF, joule_x, joule_DF
+
+        if comp == 'both':
+            return joule_CF + joule_x + joule_DF
+        elif comp == 'decomp':
+            return joule_CF, joule_x, joule_DF
+        elif comp == 'CF':
+            return joule_CF
+        elif comp == 'DF':
+            return joule_x + joule_DF
+        else:
+            raise ValueError('Invalid comp provided')
         
 
 #%%

@@ -15,7 +15,7 @@ except:
 #%%
 
 class Solver(object):
-    def __init__(self, G, d, w=None, reg=None, use_gpu=False, **kwargs):
+    def __init__(self, G=None, d=None, w=None, GTG=None, GTd=None, reg=None, use_gpu=False, **kwargs):
         
         # Store relevant inputs
         self.G = G
@@ -26,9 +26,15 @@ class Solver(object):
         
         # Initiate relevant variables
         self._GT = None
-        self._GTd = None
-        self._GTG = None
+        self._GTd = GTd
+        self._GTG = GTG
         self._GTG_scale = None
+        
+        if self._GTG is None and self.G is None:
+            raise ValueError('Both GTG and G cannot be None')
+        
+        if self._GTd is None and self.d is None:
+            raise ValueError('Both GTd and d cannot be None')
         
         self.reg = reg
         self._LTL = None

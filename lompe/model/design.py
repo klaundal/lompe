@@ -11,6 +11,7 @@ from dipole import Dipole
 from ppigrf import igrf
 from .varcheck import check_input, extrapolation_check
 from lompe.utils.time import yearfrac_to_datetime
+from .solver import Solver
 
 #%%
 
@@ -38,6 +39,7 @@ class Design(object):
         self.dipole = dipole
         self.epoch = epoch
     
+        self._Q = None    
         self._QiA = None
     
         self.get_main_field()
@@ -61,17 +63,22 @@ class Design(object):
         self.gH.hemisphere = -np.sign(self.Bu.flatten()[0]) # 1 for north, -1 for south
 
     @property
+    def Q(self):
+        if self._Q is None:
+            # cell area matrix:
+            A = np.diag(np.ravel(self.gH.A_J))
+            # curl/divergence distribution matrix Q:
+            Q = np.eye(self.gH.size_J) - A.dot(np.full((self.gH.size_J, self.gH.size_J), 1 / (4 * np.pi * self.gH.R**2)))
+            self._Q = Q
+        return self._Q
+
+    @property
     def QiA(self):
         if self._QiA is None:
             # cell area matrix:
-            dxi, deta, A = self.gH.grid_J.projection.differentials(self.gH.xi_J , self.gH.eta_J,
-                                                                   self.gH.grid_J.dxi, self.gH.grid_J.deta, R = self.gH.R)
-            A = np.diag(np.ravel(A))
-            # curl/divergence distribution matrix Q:
-            Q = np.eye(self.gH.size_J) - A.dot(np.full((self.gH.size_J, self.gH.size_J), 1 / (4 * np.pi * self.gH.R**2)))
-
+            A = np.diag(np.ravel(self.gH.A_J))
             # inverse of QA
-            self._QiA = np.linalg.pinv(Q, hermitian = True).dot(A)
+            self._QiA = np.linalg.pinv(self.Q, hermitian = True).dot(A)
         return self._QiA
 
     @property
@@ -90,13 +97,21 @@ class Design(object):
     def Ee_DF(self):
         if self._Ee_DF is None:
             self._Ee_DF, self._En_DF = self._E_matrix_DF()
-        return self._Ee_CF
+        return self._Ee_DF
 
     @property
     def En_DF(self):
         if self._En_DF is None:
             self._Ee_DF, self._En_DF = self._E_matrix_DF()
         return self._En_DF
+
+    # dBr/dt    
+    def dBrdt_matrix(self, dt=1):
+        # Area of the mesh grid cells
+        A = self.gH.A_E.flatten()
+        # Curl relation of the DF SECS
+        Q = np.eye(self.gH.size_E) - A.dot(np.full((self.gH.size_E, self.gH.size_E), 1 / (4 * np.pi * self.gH.R**2)))
+        return -dt * np.diag(1/A).dot(Q)
 
     # Scalar potentials
     @check_input
@@ -174,6 +189,37 @@ class Design(object):
 
     # MAGNETIC FIELDS
     @check_input
+    def _Br2Bg(self, lon = None, lat = None, r = None, return_shape = False):
+        """
+        Calculate matrix that relates the divergence-free magnetic field below 
+        the ionosphere to radial magnetic field on the ionosphere.
+        """
+        
+        _, _, Hu = get_SECS_B_G_matrices(self.gH.lat_E, self.gH.lon_E, self.gH.R, 
+                                         self.gH.lat_J, self.gH.lon_J,
+                                         current_type = 'divergence_free',
+                                         RI = self.gH.R,
+                                         singularity_limit = self.secs_singularity_limit,
+                                         induction_nullification_radius = self.perfect_conductor_radius)
+        
+        slv = Solver(GTG=Hu.T.dot(Hu), GTd=Hu.T)
+        slv.solve_inverse_problem()
+        Hud = slv.m
+        
+        #Hud = Solver(GTG=Hu.T.dot(Hu), GTd=Hu.T).solve_inverse_problem().m
+        #Hud = np.linalg.lstsq(Hu.T.dot(Hu), Hu.T)[0]
+        
+        He, Hn, Hu = get_SECS_B_G_matrices(lat, lon, r, self.gH.lat_J, self.gH.lon_J,
+                                           current_type = 'divergence_free',
+                                           RI = self.gH.R,
+                                           singularity_limit = self.secs_singularity_limit,
+                                           induction_nullification_radius = self.perfect_conductor_radius)
+        
+        H = np.vstack((He, Hn, Hu))
+        H = H.dot(Hud)
+        return H
+    
+    @check_input
     def _B_df_matrix_CF(self, lon = None, lat = None, r = None, return_shape = False, return_poles = False):
         """
         Calculate matrix that relates divergence-free magnetic field to the CF SECS.
@@ -233,10 +279,10 @@ class Design(object):
         # combine:
         HQiA = H.dot(self.QiA)
         stheta = np.sin(self.gH.lat_E.flatten()/180*np.pi)
-        c = - self.gH.Dn.dot(SP) * Ee + self.gH.De.dot(SP) * En \
-            + SP/(self.gH.R*stheta) * (self.gH.Dn.dot(Ee * stheta) - self.gH.De.dot(En)) \
-            - self.gH.Dn.dot(SH) * En * self.gH.hemisphere \
-            - self.gH.De.dot(SH) * Ee * self.gH.hemisphere
+        c = - self.gH.Dn_J.dot(SP) * Ee + self.gH.De_J.dot(SP) * En \
+            + SP/(self.gH.R*stheta) * (self.gH.Dn_J.dot(Ee * stheta) - self.gH.De_J.dot(En)) \
+            - self.gH.Dn_J.dot(SH) * En * self.gH.hemisphere \
+            - self.gH.De_J.dot(SH) * Ee * self.gH.hemisphere
 
         if return_poles:
             return self.QiA.dot(c)

@@ -46,6 +46,8 @@ class GridHandler(object):
         self._De_J, self._Dn_J, self._Ddiv_J = None, None, None
         self._De_E, self._Dn_E, self._Ddiv_E = None, None, None
 
+        self._A_J, self._A_E = None, None
+
     def __repr__(self):
         return f"<GridHandler J-grid: {self.grid_J.shape}, E-grid: {self.grid_E.shape}, pos: {self.position}>"
     
@@ -58,6 +60,24 @@ class GridHandler(object):
     def clear_Ds(self):
         self._De_J, self._Dn_J, self._Ddiv_J = None, None, None
         self._De_E, self._Dn_E, self._Ddiv_E = None, None, None
+    
+    @property
+    def A_J(self):
+        if self._A_J is None:
+            _, _, A = self.grid_J.projection.differentials(self.xi_J , self.eta_J,
+                                                           self.dxi_J, self.deta_J, 
+                                                           R = self.R)
+            self._A_J = A
+        return self._A_J
+
+    @property
+    def A_E(self):
+        if self._A_E is None:
+            _, _, A = self.grid_E.projection.differentials(self.xi_E , self.eta_E,
+                                                           self.dxi_E, self.deta_E, 
+                                                           R = self.R)
+            self._A_E = A
+        return self._A_E
     
     @property
     def shape_J(self):

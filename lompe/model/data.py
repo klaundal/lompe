@@ -46,6 +46,9 @@ class Data(object):
         the rows correspond to the directions that are measured. Specify which directions using the components 
         keyword (see documentation for that keyword for details).
 
+        'dB_ground_mag': Temporal derivative of magnetic field perturbations on ground. 
+        Instructions are exactly the same as 'ground_mag'. Except, units are Tesla / s.
+
         'space_mag_fac': Magnetic field perturbations in space associated with field-aligned currents.
         Unless the components keyword is used, values should be given as (3, N) arrays, with eastward, 
         northward and upward components of the magnetic field perturbation in the three rows, in Tesla. Note that 
@@ -92,6 +95,7 @@ class Data(object):
         datatype: string
             datatype should indicate which type of data it is. They can be:
             'ground_mag'     - ground magnetic field perturbation (no main field) data
+            'dB_ground_mag'  - Temporal derivative of ground magnetic field perturbation (no main field) data
             'space_mag_full' - space magnetic field perturbation with both FAC and
                                divergence-free current signal
             'space_mag_fac'  - space magnetic field perturbation with only FAC signal
@@ -131,12 +135,12 @@ class Data(object):
         self.isvalid = False
         datatype = datatype.lower()
 
-        if datatype not in ['ground_mag', 'space_mag_full', 'space_mag_fac', 'convection', 'efield', 'fac']:
+        if datatype not in ['db_ground_mag', 'ground_mag', 'space_mag_full', 'space_mag_fac', 'convection', 'efield', 'fac']:
             raise ArgumentError(f'datatype not recognized: {datatype}')
             return(None)
 
-        errors = {'ground_mag':10e-9, 'space_mag_full':30e-9, 'space_mag_fac':30e-9, 'convection':50, 'efield':3e-3, 'fac':1e-6}
-        iweights = {'ground_mag':0.5, 'space_mag_full':0.5, 'space_mag_fac':0.5, 'convection':1.0, 'efield':1.0, 'fac':1.0}
+        errors = {'dB_ground_mag':10e-9, 'ground_mag':10e-9, 'space_mag_full':30e-9, 'space_mag_fac':30e-9, 'convection':50, 'efield':3e-3, 'fac':1e-6}
+        iweights = {'dB_ground_mag':0.5, 'ground_mag':0.5, 'space_mag_full':0.5, 'space_mag_fac':0.5, 'convection':1.0, 'efield':1.0, 'fac':1.0}
 
         if np.array(error).size == 1:
             if error == 0:
