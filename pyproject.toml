@@ -30,7 +30,7 @@ deps-from-github = [
     "polplot @ git+https://github.com/klaundal/polplot.git@main#egg=polplot",
     "secsy @ git+https://github.com/klaundal/secsy.git@main#egg=secsy",
     "pydarnio @ git+https://github.com/billetd/pyDARNio@borealis_v0.7",
-    "pydarn @ git+https://github.com/SuperDARN/pydarn.git@develop",
+    "pydarn <= 4.0",
 ]
 extras = [
     "astropy",
