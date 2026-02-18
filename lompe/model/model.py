@@ -9,6 +9,7 @@ from lompe.utils.time import yearfrac_to_datetime
 from dipole import Dipole
 from .varcheck import check_input, extrapolation_check
 import scipy
+import warnings
 
 RE = 6371.2e3 # Earth radius in meters
 
@@ -17,7 +18,9 @@ class Emodel(object):
                        Hall_Pedersen_conductance,
                        epoch = 2015., # epoch, decimal year, used for IGRF dependent calculations
                        dipole = False, # set to True to use dipole field and dipole coords
-                       perfect_conductor_radius = None
+                       perfect_conductor_radius = None,
+                       ew_regularization_limit = None,
+                       custom_dominant_direction = None
                 ):
         """
         Electric field model
@@ -54,11 +57,37 @@ class Emodel(object):
             the radius (< grid.R) of a spherical shell that is a perfect conductor, at which induced currents 
             in the ground cancel Br from space currents (Juusola et al. 2016 doi:10.1002/2016JA022961). If 
             set to None (default), ground delta B will be modeled exclusively in terms of space currents
+        ew_regularization_limit: tuple, optional
+            Specify a tuple of two latitudes between which the east-west regularization term is
+            reduced to zero towards the magnetic pole. The motivation for this is that east-west 
+            regularization is not appropriate in the polar cap, and it might be better to turn it off there
+        custom_dominant_direction: function, optional
+            Define the 'dominant' direction of the solution. By default, the dominant direction is magnetic
+            east-west, meaning that we encourage arc-like structures, and that arcs are oriented along QD
+            east-west. To override this, provide a function that returns a vector along a custom dominant
+            direction for given lon/lat. The direction can be variable across the grid. The function should 
+            handle array input, and it should output a 2 x N array that has the eastward components of the 
+            dominant direction in the first row, and the northwar dcomponents on the second row 
+            (the sign of the vector doesn't matter)
         """
         # options
         self.perfect_conductor_radius = perfect_conductor_radius
         self.dipole = dipole
         self.epoch = epoch
+
+        self.custom_dominant_direction = custom_dominant_direction
+
+
+        # function that tunes the east west regularization
+        if ew_regularization_limit is None:
+            self.lat_w = lambda lat: np.ones((lat.size, 1))
+        else:
+            try:
+                a, b = ew_regularization_limit
+            except:
+                raise Exception('ew_regularization_limit should have two and only two values')
+            self.lat_w = lambda lat: np.where(lat < a, 1, np.where(lat > b, 0, (b - lat) / (b - a))).reshape((-1, 1))
+
 
         # set up inner and outer grids:
         self.grid_J = grid # inner
@@ -86,12 +115,12 @@ class Emodel(object):
         self.clear_model(Hall_Pedersen_conductance = Hall_Pedersen_conductance)
 
         # calculate main field values for all grid points
-        refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
+        self.refh = (self.R - RE) * 1e-3 # apex reference height [km] - also used for IGRF altitude
         if self.dipole:
             Bn, Bu = Dipole(self.epoch).B(self.lat_E, self.grid_E.R * 1e-3)
             Be = np.zeros_like(Bn)
         else: # use IGRF
-            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, refh, yearfrac_to_datetime([self.epoch]))
+            Be, Bn, Bu = igrf(self.lon_E, self.lat_E, self.refh, yearfrac_to_datetime([self.epoch]))
         Be, Bn, Bu = Be * 1e-9, Bn * 1e-9, Bu * 1e-9 # nT -> T
         self.B0 = np.sqrt(Be**2 + Bn**2 + Bu**2).reshape((1, -1))
         self.Bu = Bu.reshape((1, -1))
@@ -123,16 +152,38 @@ class Emodel(object):
         self.QiA = np.linalg.pinv(self.Q, hermitian = True).dot(self.A)
 
         # matrix L that calculates derivative in magnetic eastward direction on grid_E:
-        De2, Dn2 = self.grid_E.get_Le_Ln()
-        if self.dipole: # L matrix gives gradient in eastward direction
-            self.L = De2
-            self.LTL = self.L.T.dot(self.L)
-        else: # L matrix gives gradient in QD eastward direction
-            apx = apexpy.Apex(epoch, refh = refh)
-            f1, f2 = apx.basevectors_qd(self.grid_E.lat.flatten(), self.grid_E.lon.flatten(), refh)
-            f1 = f1/np.linalg.norm(f1, axis = 0)
-            self.L = De2 * f1[0].reshape((-1, 1)) + Dn2 * f1[1].reshape((-1, 1))
-            self.LTL = self.L.T.dot(self.L)
+        self.Le  , self.Ln  , self.LTLe  , self.LTLn   = self.compute_L_matrices(self.grid_E)
+        self.Le_J, self.Ln_J, self.LTLe_J, self.LTLn_J = self.compute_L_matrices(self.grid_J)
+
+
+    def compute_L_matrices(self, grid):
+        """
+        Computes Le and Ln matrices for a given grid.
+        """
+        De, Dn = grid.get_Le_Ln()
+        if self.dipole: # dipole east/north directions on dipole grid
+            Le = De * self.lat_w(self.hemisphere * grid.lat.flatten())
+            Ln = Dn * self.lat_w(self.hemisphere * grid.lat.flatten())
+        else: # east/north directions (QD or user-defined) on geographic grid
+            if self.custom_dominant_direction is not None: # f1 is defined by user:
+                f1 = self.custom_dominant_direction(grid.lon.flatten(), grid.lat.flatten())
+                f2 = np.vstack(-f1[1], f1[0])
+            else: # QD east/north
+                apx = apexpy.Apex(self.epoch, refh = self.refh)
+                mlat, mlon = apx.geo2apex(grid.lat.flatten(), grid.lon.flatten(), self.refh)
+                f1, f2 = apx.basevectors_qd(grid.lat.flatten(), grid.lon.flatten(), self.refh)
+
+            f1 = (f1 / np.linalg.norm(f1, axis=0)).reshape((-1, 1))
+            f2 = (f2 / np.linalg.norm(f2, axis=0)).reshape((-1, 1))
+
+            Le = (De * f1[0] + Dn * f1[1]) * self.lat_w(self.hemisphere * mlat)
+            Ln = (De * f2[0] + Dn * f2[1]) * self.lat_w(self.hemisphere * mlat)
+
+
+        LTLe = Le.T.dot(Le)
+        LTLn = Ln.T.dot(Ln)
+
+        return Le, Ln, LTLe, LTLn
 
 
     def clear_model(self, Hall_Pedersen_conductance = None):
@@ -230,8 +281,8 @@ class Emodel(object):
         from lompe.utils import save_model
         return save_model(self, time=time, save=parameters_to_save, **kwargs)
         
-    def run_inversion(self, l1 = 0, l2 = 0,
-                      data_density_weight = True, perimeter_width = 10,
+    def run_inversion(self, l1 = 0, l2 = 0, l3 = 0, FAC_reg=False,
+                      data_density_weight = True, perimeter_width = 10, save_matrices=False,
                       **kwargs):
         """ Calculate model vector
 
@@ -240,10 +291,19 @@ class Emodel(object):
 
         Parameters
         ----------
-        l1 : float
-            Damping parameter for model norm
+        l1 : float or tuple
+            Damping parameter for model norm. If FAC_reg=True l1 can be a tuple 
+            where the first and second entry target the FAC and E norm, 
+            respectively. If it is just a float the E norm will be ignored.
         l2 : float
-            Damping parameter for variation in the magnetic eastward direction
+            Damping parameter for variation in the magnetic eastward direction.
+            Functionality similar to l1 in regards to FAC_reg.
+        l3 : float
+            Damping parameter for variation in the magnetic northward direction
+            Functionality similar to l1 in regards to FAC_reg.
+        FAC_reg : boolean
+            Activates FAC based regularization if True (default is False). Read
+            l1 description for details on mixed FAC and E 2-norm regularization.
         data_density_weight : bool, optional
             Set to True to apply weights that are inversely proportional
             to data density. 
@@ -252,6 +312,8 @@ class Emodel(object):
             when choosing the data to be included in the inversion. Default is 10,
             which means that a 10 cell wide perimeter around the model inner
             grid will be included. 
+        save_matrices : bool, optional
+            Set to True to save G, d, and w in the lompe model object.
 
         **kwargs : dict
             key arguments to be passed to the scipy.linalg.lstsq (e.g., 'cond', 'lapack_driver').
@@ -259,9 +321,10 @@ class Emodel(object):
         """
 
         # initialize G matrices
-        #self._G = np.empty((0, self.grid_E.size))
-        #self._d = np.empty( 0)
-        #self._w = np.empty( 0)
+        if save_matrices:
+            self._G = np.empty((0, self.grid_E.size))
+            self._d = np.empty( 0)
+            self._w = np.empty( 0)
 
         # make expanded grid for calculation of data density:
         self.biggrid = cs.CSgrid(self.grid_J.projection,
@@ -286,63 +349,113 @@ class Emodel(object):
             for ds in self.data[dtype]: # loop through the datasets within each data type
                 # skip data points that are outside biggrid:
                 ds = ds.subset(self.biggrid.ingrid(ds.coords['lon'], ds.coords['lat']))
-                
-                if 'mag' in dtype:
-                    Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
-                    G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
-                if dtype in ['efield', 'convection']:
-                    Gs = self.matrix_func[dtype](**ds.coords)
-                    G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
-                if dtype == 'fac':
-                    G = np.vstack(self.matrix_func[dtype](**ds.coords))
+                if ds.coords['lat'].size > 1: #If there is data inside biggrid                
+                    if 'mag' in dtype:
+                        Gs = np.split(self.matrix_func[dtype](**ds.coords), 3, axis = 0)
+                        G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
+                    if dtype in ['efield', 'convection']:
+                        Gs = self.matrix_func[dtype](**ds.coords)
+                        G = np.vstack([G_ for i, G_ in enumerate(Gs) if i in ds.components])
+                    if dtype == 'fac':
+                        G = np.vstack(self.matrix_func[dtype](**ds.coords))
 
-                if (dtype in ['convection', 'efield']) & (ds.los is not None): # deal with line of sight data:
-                    Ge, Gn = np.split(G, 2, axis = 0)
-                    G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
+                    if (dtype in ['convection', 'efield']) & (ds.los is not None): # deal with line of sight data:
+                        Ge, Gn = np.split(G, 2, axis = 0)
+                        G = Ge * ds.los[0].reshape((-1, 1)) + Gn * ds.los[1].reshape((-1, 1))
 
-                # calculate weights based on data density:
-                if data_density_weight:
-                    bincount = self.biggrid.count(ds.coords['lon'], ds.coords['lat'])
-                    i, j = self.biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
-                    spatial_weight = 1. / np.maximum(bincount[i, j], 1)
-                    spatial_weight[i == -1] = 1
-                    if ds.values.ndim == 2: # stack weights for each component in dataset.values:
-                        spatial_weight = np.tile(spatial_weight, ds.values.shape[0])
-                else:
-                    spatial_weight = np.ones(ds.values.size)
+                    # calculate weights based on data density:
+                    if data_density_weight:
+                        bincount = self.biggrid.count(ds.coords['lon'], ds.coords['lat'])
+                        i, j = self.biggrid.bin_index(ds.coords['lon'], ds.coords['lat'])
+                        spatial_weight = 1. / np.maximum(bincount[i, j], 1)
+                        spatial_weight[i == -1] = 1
+                        if ds.values.ndim == 2: # stack weights for each component in dataset.values:
+                            spatial_weight = np.tile(spatial_weight, ds.values.shape[0])
+                    else:
+                        spatial_weight = np.ones(ds.values.size)
 
-                dimensions = np.array(ds.values, ndmin = 2).shape[0]
-                if np.array(ds.error, ndmin=2).shape[0]==1:
-                    error = np.tile(ds.error, dimensions)
-                else: #error is different for different components
-                    error = ds.error.flatten()
-                                    
-                w_i = spatial_weight * 1/(error**2) * iweights[ii]
-                if iweights[ii] != 1:
-                   print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
-                                
-                #self._G = np.vstack((self._G, G))
-                #self._d = np.hstack((self._d, np.hstack(ds.values)))
-                #self._w = np.hstack((self._w, w_i))
+                    dimensions = np.array(ds.values, ndmin = 2).shape[0]
+                    if np.array(ds.error, ndmin=2).shape[0]==1:
+                        error = np.tile(ds.error, dimensions)
+                    else: #error is different for different components
+                        error = ds.error.flatten()
+                                        
+                    w_i = spatial_weight * 1/(error**2) * iweights[ii]
+                    if iweights[ii] != 1:
+                        print('{}: Measurement uncertainty effectively changed from {} to {}'.format(dtype, np.median(error), np.median(error)/np.sqrt(iweights[ii])))
 
-                GTG_i = G.T.dot(np.diag(w_i)).dot(G)
-                GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
-                
-                GTGs.append(GTG_i)
-                GTds.append(GTd_i)
-                ii += 1         
+                    if save_matrices:
+                        self._G = np.vstack((self._G, G))
+                        self._d = np.hstack((self._d, np.hstack(ds.values)))
+                        self._w = np.hstack((self._w, w_i))
+
+                    GTG_i = G.T.dot(np.diag(w_i)).dot(G)
+                    GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
+                    
+                    GTGs.append(GTG_i)
+                    GTds.append(GTd_i)
+                    ii += 1         
 
         self.GTG = np.sum(np.array(GTGs), axis=0)
         self.GTd = np.sum(np.array(GTds), axis=0)
 
-        # regularization
-        if (l1 > 0 or l2 > 0):
-            gtg_mag = np.median(np.diagonal(self.GTG))
-            ltl_mag = np.median(self.LTL.diagonal())
-            GG = self.GTG + l1*gtg_mag * np.eye(self.GTG.shape[0]) + l2 * gtg_mag / ltl_mag * self.LTL
-        else:
-            GG = self.GTG
+        # Reguarlization
+        if not FAC_reg and (isinstance(l1, tuple) or isinstance(l2, tuple) or isinstance(l3, tuple)):
+            raise ValueError('l1, l2, and l3 can only be tuple if FAC_reg=True')
         
+        def reg_E(self, l1, l2, l3):
+            """Calculate the roughening matrix for E (normal) regularization"""
+            LTL = 0
+            if l1 > 0:
+                LTL_l1 = np.eye(self.GTG.shape[0])
+                LTL += l1 * LTL_l1 / np.median(LTL_l1.diagonal())
+            if l2 > 0:
+                LTL += l2 * self.LTLe / np.median(self.LTLe.diagonal())
+            if l3 > 0:
+                LTL += l3 * self.LTLn / np.median(self.LTLn.diagonal())
+            return LTL
+        
+        def reg_FAC(self, l1, l2, l3):
+            """Calculate the roughening matrix for FAC regularization"""
+            G_FAC = self.FAC_matrix()
+            LTL = 0
+            if l1 > 0:
+                LTL_l1 = G_FAC.T.dot(G_FAC)
+                LTL += l1 * LTL_l1 / np.median(LTL_l1.diagonal())
+            if l2 > 0:
+                G_FAC_e = self.Le_J.dot(G_FAC)
+                LTL_l2 = G_FAC_e.T.dot(G_FAC_e)
+                LTL += l2 * LTL_l2 / np.median(LTL_l2.diagonal())
+            if l3 > 0:
+                G_FAC_n = self.Ln_J.dot(G_FAC)
+                LTL_l3 = G_FAC_n.T.dot(G_FAC_n)
+                LTL += l3 * LTL_l3 / np.median(LTL_l3.diagonal())
+            return LTL
+        
+        def ensure_tuple(value):
+            """Ensure the value is a tuple of length 2."""
+            if isinstance(value, tuple):
+                if len(value) != 2:
+                    raise ValueError(f"Tuple {value} must have length 2.")
+                return value
+            return (value, 0)
+        
+        if not FAC_reg:
+            LTL = reg_E(self, l1, l2, l3)
+        elif FAC_reg and  any(isinstance(x, tuple) for x in (l1, l2, l3)):
+            l1 = ensure_tuple(l1)
+            l2 = ensure_tuple(l2)
+            l3 = ensure_tuple(l3)
+            LTL = reg_FAC(self, l1[0], l2[0], l3[0])
+            LTL += reg_E(self, l1[1], l2[1], l3[1])
+        elif FAC_reg:
+            LTL = reg_FAC(self, l1, l2, l3)
+        else:
+            LTL = 0
+        
+        gtg_mag = np.median(np.diagonal(self.GTG))
+        GG = self.GTG + LTL*gtg_mag
+            
         if 'rcond' in kwargs.keys():
             warnings.warn("'rcond' keyword (and use of np.linalg.lstsq) is deprecated! Use kw 'cond' (for scipy.linalg.lstsq) instead")
             kwargs['cond'] = kwargs['rcond']
