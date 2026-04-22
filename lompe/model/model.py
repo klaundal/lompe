@@ -1098,6 +1098,41 @@ class Emodel(object):
 
 
     @check_input
+    def equivalent_current_function(self, lon = None, lat = None):
+        """
+        Calculate the equivalent current function psi, where j_equivalent_current = u_hat cross grad(psi)
+
+        Requires the model vector to be defined.
+
+        Parameters
+        ----------
+        lon : array, optional
+            Longitudes [degrees] of the evaluation points, default is center of exterior grid points (grid_E).
+            Must have same shape as lat
+        lat : array, optional
+            Latitudes [degrees] of the evaluation points, default is center of exterior grid points (grid_E).
+            Must have same shape as lon
+
+        Returns
+        -------
+        psi : array
+            Equivalent current function, unit A/m
+
+        Note
+        ----
+        psi is calculated by evaluating the SECS G matrix for a potential, with a sign reversal
+
+        """
+
+        shape = np.broadcast(lon, lat).shape
+
+        S_df = self._B_df_matrix(return_poles = True)
+        G_psi = -get_SECS_J_G_matrices(lat, lon, self.lat_J, self.lon_J, current_type = 'potential', RI = self.R, singularity_limit = self.secs_singularity_limit)
+
+        return G_psi.dot(S_df)
+
+
+    @check_input
     def get_SECS_currents(self, lon = None, lat = None):
         """
         Calculate the horizontal ionospheric surface current density,
