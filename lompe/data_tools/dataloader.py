@@ -100,6 +100,9 @@ def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./', source='j
         elif source == 'cdaweb':
             files = glob.glob(basepath + '*' + sat + '*' +
                               event[0:4] + doy_str + '*.nc')
+        else:
+            raise ValueError(
+                f"read_ssusi: unsupported source '{source}'. Expected 'jhuapl' or 'cdaweb'.")
         files.sort()
         if len(files) == 0:
             continue
