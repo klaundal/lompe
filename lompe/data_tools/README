@@ -1,9 +1,11 @@
 Directory for scripts for data handling.
 
 Currently handles the following data sets:
-	- DMSP SSUSI (EDR AURORA, netcdf format)
+	- DMSP SSUSI (EDR AURORA, netcdf format) (as of February 2025, SSUSI data is not supported on "jhuapl" use "cdaweb" option)
 	- DMSP SSIES (Madrigal)
-	- SuperDARN (gridmap)
+	- SuperDARN (gridmap) from Chartier, Alex T
 	- SuperMAG (netcdf format)
 	- Iridium (from AMPERE, netcdf format)
+	- CHAMP (cdf format)
+	- SWARM (using viresclient)
 

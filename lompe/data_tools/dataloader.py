@@ -22,13 +22,13 @@ import pandas as pd
 import datetime as dt
 import xarray as xr
 import numpy as np
-
+from lompe.utils.time import date2doy
 # degrees <-> radians conversion
 d2r = np.pi / 180.
 r2d = 180. / np.pi
 
 
-def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
+def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./', source='jhuapl'):
     """
 
     Called and used for modelling auroral conductance in cmodel.py.
@@ -51,6 +51,9 @@ def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
     tempfile_path : str, optional
         Location for storing processed SSUSI data.
         Default: './'
+    source : str, optional
+        Specify source of SUSSI data. 
+        Default: 'jhuapl', other option is 'cdaweb'
 
     Returns
     -------
@@ -88,10 +91,15 @@ def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
             'read_ssusi: Could not load netCDF4 module. Will not be able to read SSUSI-files from APL.')
 
     imgs = []  # List to hold all images. Converted to xarray later.
+    doy_str = f"{date2doy(event):03d}"
 
     for sat in ['F16', 'F17', 'F18', 'F19']:
-        files = glob.glob(basepath + '*' + sat + '*' +
-                          event[0:4]+event[5:7]+event[8:10] + '*.NC')
+        if source == 'jhuapl':
+            files = glob.glob(basepath + '*' + sat + '*' +
+                              event[0:4] + event[5:7] + event[8:10] + '*.NC')
+        elif source == 'cdaweb':
+            files = glob.glob(basepath + '*' + sat + '*' +
+                              event[0:4] + doy_str + '*.nc')
         files.sort()
         if len(files) == 0:
             continue
@@ -163,8 +171,8 @@ def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
                     hr = hr - 24
                     center_hr = center_hr - 24
 
-                m = int((center_hr - hr)*60)
-                s = round(((center_hr - hr)*60 - m)*60)
+                m = int((center_hr - hr) * 60)
+                s = round(((center_hr - hr) * 60 - m) * 60)
                 if s == 60:
                     t0 = dt.datetime(year, 1, 1, hr, m, 59) + \
                         dt.timedelta(seconds=1)
@@ -199,7 +207,7 @@ def read_ssusi(event, hemi='north', basepath='./', tempfile_path='./'):
 
     else:     # save as netcdf in specified path
         imgs = xr.concat(imgs, dim='date')
-        imgs = imgs.assign({'hemisphere':  hemi})
+        imgs = imgs.assign({'hemisphere': hemi})
         imgs = imgs.sortby(imgs['date'])
         print('DMSP SSUSI file saved: ' + savefile)
 
@@ -305,26 +313,32 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
 
     dmsp = pd.DataFrame()
     dmsp2 = pd.DataFrame()   # for the density fraction
-
-    for i in expList:        # get neccessary files
+    date_str = event.replace('-', '')
+    no_data_found = True
+    for i in expList:
         fileList = testData.getExperimentFiles(i.id)
         filenames = []
 
         for fname in fileList:
             filenames.append(fname.name)
-
-        ssies = str([s for s in filenames if '_' + str(sat) + 's1' in s][0])
-        temp_dens = str(
-            [s for s in filenames if '_' + str(sat) + 's4' in s][0])
+        filenames = [filename for filename in filenames if date_str in filename]
+        if len(filenames) == 0:
+            continue
+        no_data_found = False
+            # ssies = str([s for s in filenames if '_' + str(sat) + 's1' in s][0])
+        ssies = [s for s in filenames if '_' + str(sat) +  's1.' in s]
+        # temp_dens = str(
+        #     [s for s in filenames if '_' + str(sat) + 's4.' in s][0])
+        temp_dens = [s for s in filenames if '_' + str(sat) + 's4.' in s]
 
         datafile = basepath + 'ssies_temp_' + event + '.hdf5'
         result = testData.downloadFile(
-            ssies, datafile, **madrigal_kwargs, format="hdf5")
+            ssies[0], datafile, **madrigal_kwargs, format="hdf5")
         f = pd.read_hdf(datafile, mode='r', key='Data/Table Layout')
 
         tempdensfile = basepath + 'ssies_tempdens_data_' + event + '.hdf5'
         result = testData.downloadFile(
-            temp_dens, tempdensfile, **madrigal_kwargs, format="hdf5")
+            temp_dens[0], tempdensfile, **madrigal_kwargs, format="hdf5")
         f2 = pd.read_hdf(tempdensfile, mode='r', key='Data/Table Layout')
 
         use = (f.ut1_unix >= usTime) & (f.ut1_unix < ueTime)
@@ -335,8 +349,11 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
         dmsp = pd.concat([dmsp, temp])
         dmsp2 = pd.concat([dmsp2, temp2])
 
-    dmsp.index = np.arange(len(dmsp))
-    dmsp2.index = np.arange(len(dmsp2))
+        dmsp.index = np.arange(len(dmsp))
+        dmsp2.index = np.arange(len(dmsp2))
+    if no_data_found:
+        print('No data found for ' + event + ' and satellite ' + str(sat))
+        return None
 
     # set datetime as index
     times = []
@@ -498,8 +515,8 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
 
         stime = dt.datetime(tt['start.year'], tt['start.month'], tt['start.day'],
                             tt['start.hour'], tt['start.minute'], int(tt['start.second']))
-        etime = dt.datetime(tt['end.year'],   tt['end.month'],   tt['end.day'],
-                            tt['end.hour'],   tt['end.minute'],   int(tt['end.second']))
+        etime = dt.datetime(tt['end.year'], tt['end.month'], tt['end.day'],
+                            tt['end.hour'], tt['end.minute'], int(tt['end.second']))
         duration = etime - stime
 
         temp = pd.DataFrame()
@@ -529,7 +546,7 @@ def read_sdarn(event, basepath='./', tempfile_path='./', hemi='north'):
         temp.loc[:, 'range'] = tt['vector.pwr.median']       # in km
         # spectral width in m/s
         temp.loc[:, 'wdt'] = tt['vector.wdt.median']
-        temp.loc[:, 'time'] = stime + duration/2
+        temp.loc[:, 'time'] = stime + duration / 2
 
         ddd = pd.concat([ddd, temp], ignore_index=True)
 
@@ -685,7 +702,7 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
             fn = files[0]
         except:
             raise FileNotFoundError(
-                'Cannot find Iridium netcdf in specified folder.')
+                'Cannot find Iridium netcdf in specified folder.')  
 
     iridset = xr.load_dataset(fn, engine='netcdf4')
 
@@ -757,17 +774,17 @@ def getbearing(lat0, lon0, lat1, lon1):
 
     """
 
-    lat0 = lat0*d2r
-    lon0 = lon0*d2r
-    lat1 = lat1*d2r
-    lon1 = lon1*d2r
+    lat0 = lat0 * d2r
+    lon0 = lon0 * d2r
+    lat1 = lat1 * d2r
+    lon1 = lon1 * d2r
 
     coslt1 = np.cos(lat1)
     sinlt1 = np.sin(lat1)
     coslt0 = np.cos(lat0)
     sinlt0 = np.sin(lat0)
-    cosl0l1 = np.cos(lon1-lon0)
-    sinl0l1 = np.sin(lon1-lon0)
+    cosl0l1 = np.cos(lon1 - lon0)
+    sinl0l1 = np.sin(lon1 - lon0)
 
     cosc = sinlt0 * sinlt1 + coslt0 * coslt1 * cosl0l1
     # Avoid roundoff problems by clamping cosine range to [-1,1].
@@ -782,8 +799,8 @@ def getbearing(lat0, lon0, lat1, lon1):
     sinaz = np.zeros(len(lat0))
     cosaz = np.ones(len(lat0))
     cosaz[small] = (coslt0[small] * sinlt1[small] - sinlt0[small]
-                    * coslt1[small]*cosl0l1[small]) / sinc[small]
-    sinaz[small] = sinl0l1[small]*coslt1[small]/sinc[small]
+                    * coslt1[small] * cosl0l1[small]) / sinc[small]
+    sinaz[small] = sinl0l1[small] * coslt1[small] / sinc[small]
 
     return np.arctan2(sinaz, cosaz)
 
