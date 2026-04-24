@@ -22,7 +22,7 @@ import pandas as pd
 import datetime as dt
 import xarray as xr
 import numpy as np
-from lompe.utils.time import date2doy
+from lompe.utils.time import date_to_doy as date2doy
 # degrees <-> radians conversion
 d2r = np.pi / 180.
 r2d = 180. / np.pi
