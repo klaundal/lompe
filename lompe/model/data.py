@@ -217,7 +217,7 @@ class Data(object):
 
         """
 
-        self.values  = np.array(self.values , ndmin = 2)[:, indices].squeeze()
+        self.values  = np.array(self.values , ndmin = 2)[:, indices]
         if np.array(self.error, ndmin=2).shape[0] >= 2: # errors for each component
             self.error = self.error[:,indices]
         else:
