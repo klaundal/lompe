@@ -1,9 +1,10 @@
 """ time tools """
 import numpy as np
 import pandas as pd
+import datetime as dt
 
 
-def date_to_doy(month, day, leapyear = False):
+def date_to_doy(month, day, leapyear=False):
     """ return day of year (DOY) at given month, day
 
         month and day -- can be arrays, but must have equal shape
@@ -17,11 +18,11 @@ def date_to_doy(month, day, leapyear = False):
         KML 2016-04-20
     """
 
-    month = np.array(month, ndmin = 1)
-    day   = np.array(day, ndmin = 1)
+    month = np.array(month, ndmin=1)
+    day = np.array(day, ndmin=1)
 
     if type(leapyear) == bool:
-        leapyear = np.full_like(day, leapyear, dtype = bool)
+        leapyear = np.full_like(day, leapyear, dtype=bool)
 
     # check that shapes match
     if month.shape != day.shape:
@@ -38,14 +39,17 @@ def date_to_doy(month, day, leapyear = False):
     # flatten arrays:
     shape = month.shape
     month = month.flatten()
-    day   = day.flatten()
+    day = day.flatten()
 
     # check if day exceeds days in months
-    days_in_month    = np.array([0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-    days_in_month_ly = np.array([0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-    if ( (np.any(day[~leapyear] > days_in_month   [month[~leapyear]])) | 
-         (np.any(day[ leapyear] > days_in_month_ly[month[ leapyear]])) ):
-        raise ValueError('date2doy: day must not exceed number of days in month')
+    days_in_month = np.array(
+        [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+    days_in_month_ly = np.array(
+        [0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+    if ((np.any(day[~leapyear] > days_in_month[month[~leapyear]])) |
+            (np.any(day[leapyear] > days_in_month_ly[month[leapyear]]))):
+        raise ValueError(
+            'date2doy: day must not exceed number of days in month')
 
     cumdaysmonth = np.cumsum(days_in_month[:-1])
 
@@ -64,11 +68,11 @@ def is_leapyear(year):
 
     # if array:
     if type(year) is np.ndarray:
-        out = np.full_like(year, False, dtype = bool)
+        out = np.full_like(year, False, dtype=bool)
 
-        out[ year % 4   == 0] = True
-        out[ year % 100 == 0] = False
-        out[ year % 400 == 0] = True
+        out[year % 4 == 0] = True
+        out[year % 100 == 0] = False
+        out[year % 400 == 0] = True
 
         return out
 
@@ -102,11 +106,17 @@ def yearfrac_to_datetime(fracyear):
         Array of datetimes
     """
 
-    year = np.uint16(fracyear) # truncate fracyear to get year
-    # use pandas TimedeltaIndex to represent time since beginning of year: 
-    delta_year = pd.to_timedelta((fracyear - year)*(365 + is_leapyear(year)), unit = 'D')
+    year = np.uint16(fracyear)  # truncate fracyear to get year
+    # use pandas TimedeltaIndex to represent time since beginning of year:
+    delta_year = pd.to_timedelta(
+        (fracyear - year)*(365 + is_leapyear(year)), unit='D')
     # and DatetimeIndex to represent beginning of years:
     start_year = pd.DatetimeIndex(list(map(str, year)))
- 
+
     # adding them produces the datetime:
     return (start_year + delta_year).to_pydatetime()
+
+
+def date2doy(date_str):
+    date = dt.datetime.strptime(date_str, "%Y-%m-%d")
+    return date.timetuple().tm_yday
