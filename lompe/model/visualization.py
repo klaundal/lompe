@@ -499,7 +499,7 @@ def polarplot(ax, model, apex, time, dV = None, **clkw):
     if 'linewidth' not in kwargs.keys():
         kwargs['linewidth'] = 2
         
-    pax.coastlines(time = time, mag = apex, resolution=resolution, **kwargs)
+    pax.coastlines(time = time, mag = apex, north = True if model.hemisphere > 0 else False, resolution = resolution, **kwargs)
 
     grid = model.grid_E
     xs = (grid.lon_mesh[0, :], grid.lon_mesh[-1, :], grid.lon_mesh[:, 0], grid.lon_mesh[:, -1])
