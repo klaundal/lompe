@@ -321,12 +321,13 @@ def read_ssies(event, sat, basepath='./', tempfile_path='./', forcenew=False, **
 
         for fname in fileList:
             filenames.append(fname.name)
-        filenames = [filename for filename in filenames if date_str in filename]
+        filenames = [
+            filename for filename in filenames if date_str in filename]
         if len(filenames) == 0:
             continue
         no_data_found = False
-            # ssies = str([s for s in filenames if '_' + str(sat) + 's1' in s][0])
-        ssies = [s for s in filenames if '_' + str(sat) +  's1.' in s]
+        # ssies = str([s for s in filenames if '_' + str(sat) + 's1' in s][0])
+        ssies = [s for s in filenames if '_' + str(sat) + 's1.' in s]
         # temp_dens = str(
         #     [s for s in filenames if '_' + str(sat) + 's4.' in s][0])
         temp_dens = [s for s in filenames if '_' + str(sat) + 's4.' in s]
@@ -697,12 +698,12 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
     else:
         fn = basepath + event.replace('-', '') + 'Amp_invert.ncdf'
     if not os.path.isfile(fn):
-        files = glob.glob(basepath + '*' + event.replace('-', '') + '*.ncdf')
+        files = glob.glob(basepath + '*' + event.replace('-', '') + '*.nc')
         try:
             fn = files[0]
         except:
             raise FileNotFoundError(
-                'Cannot find Iridium netcdf in specified folder.')  
+                'Cannot find Iridium netcdf in specified folder.')
 
     iridset = xr.load_dataset(fn, engine='netcdf4')
 
