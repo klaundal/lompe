@@ -6,7 +6,7 @@ import datetime as dt
 import os
 
 
-def download_sussi(event, destination='downloads', source='jhuapl'):
+def download_sussi(event, destination='downloads', source='cdaweb'):
     """function to download SSUSI data for a given event date
     Example usage:
         event = '2014-08-20'
@@ -17,10 +17,8 @@ def download_sussi(event, destination='downloads', source='jhuapl'):
     Args:
         event (str): format YYYY-MM-DD
         destination (str, optional): where to save the data. Defaults to 'downloads'.
-        source (str, optional): Defaults to 'jhuapl'. cdaweb is the other option.
+        source (str, optional): Defaults to 'cdaweb'. 
 
-    Note: I (Fasil) prefer the cdaweb because it is more faster to downlaod.
-          but the read_sussi function in lompe package is tailored to the jhuapl data.
     """
 
     year = int(event[0:4])
@@ -28,9 +26,9 @@ def download_sussi(event, destination='downloads', source='jhuapl'):
     os.makedirs(destination, exist_ok=True)
     # iterate over the satellites with SSUSI data
     for sat in [16, 17, 18, 19]:
-        if source == 'jhuapl':
-            url = f"https://ssusi.jhuapl.edu/data_retriver?spc=f{sat}&type=edr-aur&year={year}&Doy={doy}"
-        elif source == 'cdaweb':
+        #if source == 'jhuapl':
+        #    url = f"https://ssusi.jhuapl.edu/data_retriver?spc=f{sat}&type=edr-aur&year={year}&Doy={doy}"
+        if source == 'cdaweb':
             url = f'https://cdaweb.gsfc.nasa.gov/pub/data/dmsp/dmspf{sat}/ssusi/data/edr-aurora/{year}/{doy}/'
         else:
             print(f"Unsupported source: {source}")
@@ -41,7 +39,7 @@ def download_sussi(event, destination='downloads', source='jhuapl'):
 
         for link in soup.find_all('a', href=True):
             href = link.get('href')
-            if href.lower().endswith('.nc'):  # looking for .NC (jhuapl) and .nc (cdaweb) files
+            if href.lower().endswith('.nc'): 
                 file_url = urljoin(url, href)
                 try:
                     # Download the file
