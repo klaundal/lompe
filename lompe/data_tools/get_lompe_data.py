@@ -19,7 +19,7 @@ def prepare_event_data(event, data_path="./lompe_data/", sources=None, basepath=
     Returns dict with {supermag, superdarn, champ} as DataFrames.
     """
     if sources is None:
-        sources = ["supermag", "iridium", "superdarn"]
+        sources = ["supermag", "iridium", "superdarn", "champ"]
     os.makedirs(
         data_path, exist_ok=True)  # if not already existing create the directory
     event = pd.to_datetime(event).strftime("%Y-%m-%d")
@@ -74,7 +74,7 @@ def get_data_subsets(event_data, event, delta_minutes=2, sources=None, **kwargs)
     Extract data subsets for the given time interval [t0, t1]. and prepare lompe.Data objects.
     Returns: iridium_data, supermag_data, superdarn_data, champ_data'''
     if sources is None:
-        sources = ["supermag", "iridium", "superdarn"]
+        sources = ["supermag", "iridium", "superdarn", "champ"]
     T0 = pd.to_datetime(event)
     DT = pd.Timedelta(minutes=delta_minutes)
     t0, t1 = T0 - DT / 2, T0 + DT / 2
