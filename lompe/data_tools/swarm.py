@@ -22,7 +22,7 @@ def download_swarm_mag(event, tempfile_path='./'):
     savefile = tempfile_path + event.replace('-', '') + '_swarm_mag.h5'
 
     if os.path.isfile(savefile):
-        print(f"Swarm mag file already exists at {savefile}.")
+        print(f"Swarm MAG file already exists at {savefile}.")
         return savefile
 
     try:
