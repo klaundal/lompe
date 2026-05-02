@@ -6,6 +6,7 @@ from urllib.request import urlopen
 import json
 import pandas as pd
 from urllib.error import URLError, HTTPError
+from tqdm import tqdm
 # start_date = '2019-10-15T00:00:00'
 # extent = 86400  # one hour (86400 for one day)
 
@@ -111,14 +112,14 @@ def download_supermag(event, userid="lompe", n_jobs=-1, save=True, tempfile_path
         tempfile_path, event.replace("-", "") + "_supermag.h5")
 
     if save and os.path.isfile(savefile):
-        print(f"File {savefile} already exists at {tempfile_path}.")
+        print(f"SuperMAG file already exists at {savefile}.")
         return savefile
-
+    
     stations = get_smag_stations(start, extent, userid=userid)
 
-    dfs = Parallel(n_jobs=n_jobs, verbose=10)(
+    dfs = Parallel(n_jobs=n_jobs, verbose=0)(
         delayed(get_smag_station_data)(start, extent, station, userid)
-        for station in stations
+        for station in tqdm(stations, desc=f"Downloading SuperMAG for {event}")
     )
 
     # remove failed / empty downloads
@@ -148,6 +149,8 @@ def download_supermag(event, userid="lompe", n_jobs=-1, save=True, tempfile_path
 
     # SuperMAG Z is positive downward; Lompe wants upward
     df_final["Bu"] = -df_final["Bu"]
+
+    print(f"SuperMAG - Download complete: {savefile}")
 
     if save:
         df_final.to_hdf(savefile, key="df_final", mode="w")
