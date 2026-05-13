@@ -32,7 +32,7 @@ def get_smag_stations(start_date, extent, userid="lompe"):
     return json_parts[1:]
 
 
-def get_smag_station_data(start_date, extent, station, userid="lompe", retries=5, sleep=2):
+def get_smag_station_data(start_date, extent, station, userid="lompe", retries=10, sleep=5):
     """_summary_
 
     Args:
@@ -47,12 +47,10 @@ def get_smag_station_data(start_date, extent, station, userid="lompe", retries=5
         ValueError: _description_
 
     Returns:
-        pandas dataframe: dataframe with columns ['tval', 'glat', 'glon', 'N.nez', 'E.nez', 'Z.nez', 'station'] and datetime index
+        pandas dataframe: dataframe with columns ['tval', 'glat', 'glon', 'N.geo', 'E.geo', 'Z.geo', 'station'] and datetime index
     """
     data_url = (
-        "https://supermag.jhuapl.edu/services/data-api.php"
-        f"?fmt=json&logon={userid}&start={start_date}&extent={extent}"
-        f"&geo&station={station}"
+        f"https://supermag.jhuapl.edu/services/data-api.php?fmt=json&logon={userid}&start={start_date}&extent={extent}&geo&station={station}"
     )
 
     last_error = None
@@ -89,17 +87,21 @@ def get_smag_station_data(start_date, extent, station, userid="lompe", retries=5
 
 
 def download_supermag(event, userid="lompe", n_jobs=-1, save=True, tempfile_path="./"):
-    """_summary_
+    """ downlaod supermag data for a given event (YYYY-MM-DD format string, e.g. '2019-10-15') and return a Lompe-style dataframe with columns ['Be', 'Bn', 'Bu', 'lat', 'lon', 'station'], all geogrpahic (B components and station location) and datetime index. If save=True, saves the dataframe as an h5 file in the given tempfile_path and returns the file path instead.
+
+    Helper functions:
+    - get_smag_stations: inventory of stations that have data for the given time range
+    - get_smag_station_data: download data for a given station and return as dataframe
 
     Args:
-        event (_type_): _description_
+        event (_type_): YYYY-MM-DD format string, e.g. '2019-10-15'
         userid (str, optional): Defaults to "lompe".
         n_jobs (int, optional): Defaults to -1.
         save (bool, optional): Defaults to False.
         tempfile_path (str, optional): Path to check if the file already exists (to avoid downloading it again) Defaults to "./".
 
     Raises:
-        RuntimeError: _description_
+        RuntimeError: if no station data downloaded successfully
 
     Returns:
         if save=true: event_supermag.h5 file
@@ -137,9 +139,9 @@ def download_supermag(event, userid="lompe", n_jobs=-1, save=True, tempfile_path
         .rename(columns={
             "glat": "lat",
             "glon": "lon",
-            "N.nez": "Bn",
-            "E.nez": "Be",
-            "Z.nez": "Bu",
+            "N.geo": "Bn",
+            "E.geo": "Be",
+            "Z.geo": "Bu",
         })
         [["Be", "Bn", "Bu", "lat", "lon", "station"]]
         .dropna()

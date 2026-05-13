@@ -13,7 +13,7 @@ from .swarm import download_swarm
 from .dmsp_ssies import download_dmsp_ssies
 
 
-def prepare_event_data(event, data_path="./lompe_data/", sources=None, basepath="./", **kwargs):
+def prepare_event_data(event, data_path="./examples/sample_dataset/", sources=None, basepath="./examples/sample_dataset/", **kwargs):
     """
     Download and load all event datasets once.
     Returns dict with {supermag, superdarn, champ} as DataFrames.
