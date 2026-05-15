@@ -726,15 +726,9 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
                    for h, m, s in zip(hh, mm, ss)])
 
     # get satellite position in new coordinate system
-    if 'b_eci' in iridset:
-        vec = iridset['b_eci']
-    elif 'bmodel_eci' in iridset:
-        vec = iridset['bmodel_eci']
-    else:
-        raise KeyError("Neither 'b_eci' nor 'bmodel_eci' found")
-    cart_pos = coord.CartesianRepresentation(vec.values.T[0],
-                                             vec.values.T[1],
-                                             vec.values.T[2],
+    cart_pos = coord.CartesianRepresentation(iridset.pos_eci.values.T[0],
+                                             iridset.pos_eci.values.T[1],
+                                             iridset.pos_eci.values.T[2],
                                              unit=units.m)
 
     gcrs_pos = coord.GCRS(cart_pos, obstime=irid_dt)
