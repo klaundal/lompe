@@ -32,7 +32,7 @@ def get_smag_stations(start_date, extent, userid="lompe"):
     return json_parts[1:]
 
 
-def get_smag_station_data(start_date, extent, station, userid="lompe", retries=10, sleep=5):
+def get_smag_station_data(start_date, extent, station, userid="lompe", retries=5, backoff_factor=0.5):
     """_summary_
 
     Args:
@@ -80,9 +80,19 @@ def get_smag_station_data(start_date, extent, station, userid="lompe", retries=1
 
         except (json.JSONDecodeError, ValueError, HTTPError, URLError, TimeoutError) as e:
             last_error = e
-            time.sleep(sleep * (attempt + 1))
+            wait_time = backoff_factor * (2 ** attempt)
 
-    print(f"Skipping station {station}: {last_error}")
+            print(
+                f"Attempt {attempt + 1} failed for {station}: {e}. "
+                f"Retrying in {wait_time:.1f}s..."
+            )
+
+            time.sleep(wait_time)
+
+    raise RuntimeError(
+        f"Failed to retrieve data for station {station} "
+        f"after {retries} attempts. Last error: {last_error}"
+    )
     return pd.DataFrame()
 
 
