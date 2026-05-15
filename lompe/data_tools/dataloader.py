@@ -741,9 +741,15 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
     itrs_pos = gcrs_pos.transform_to(coord.ITRS(obstime=irid_dt))
 
     # get space mag obs in new coordinate system
-    cart_B = coord.CartesianRepresentation(iridset.b_eci.values.T[0],
-                                           iridset.b_eci.values.T[1],
-                                           iridset.b_eci.values.T[2],
+    if 'b_eci' in iridset:
+        vec = iridset['b_eci']
+    elif 'bmodel_eci' in iridset:
+        vec = iridset['bmodel_eci']
+    else:
+        raise KeyError("Neither 'b_eci' nor 'bmodel_eci' found")
+    cart_B = coord.CartesianRepresentation(vec.values.T[0],
+                                           vec.values.T[1],
+                                           vec.values.T[2],
                                            unit=units.nT)
     gcrs_B = coord.GCRS(cart_B, obstime=irid_dt)
     itrs_B = gcrs_B.transform_to(coord.ITRS(obstime=irid_dt))
