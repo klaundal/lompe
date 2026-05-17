@@ -110,7 +110,7 @@ def download_sdarn(event, basepath='./', tempfile_path='./'):
                 files.sort()
                 ddd = pd.DataFrame()
                 for file in files:
-                    sm = xr.load_dataset(file)
+                    sm = xr.load_dataset(file, decode_timedelta=True)
                     st_abbrev = file.split('/')[-1].split('.')[1]
                     # mjd conversion
                     mjd_epoch = pd.Timestamp('1858-11-17')
