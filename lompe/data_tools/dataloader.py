@@ -698,7 +698,8 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
     else:
         fn = basepath + event.replace('-', '') + 'Amp_invert.ncdf'
     if not os.path.isfile(fn):
-        files = glob.glob(basepath + '*' + event.replace('-', '') + '*.nc')
+        files = glob.glob(
+            basepath + '*' + event.replace('-', '') + '_iridium' + '*.nc')
         try:
             fn = files[0]
         except:
@@ -737,10 +738,10 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
     # get space mag obs in new coordinate system
     if 'b_eci' in iridset:
         vec = iridset['b_eci']
-    elif 'bmodel_eci' in iridset:
-        vec = iridset['bmodel_eci']
+    elif 'db_eci' in iridset:
+        vec = iridset['db_eci']
     else:
-        raise KeyError("Neither 'b_eci' nor 'bmodel_eci' found")
+        raise KeyError("Neither 'b_eci' nor 'db_eci' found")
     cart_B = coord.CartesianRepresentation(vec.values.T[0],
                                            vec.values.T[1],
                                            vec.values.T[2],

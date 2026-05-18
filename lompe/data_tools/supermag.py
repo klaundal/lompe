@@ -1,168 +1,325 @@
-from joblib import Parallel, delayed
-import numpy as np
 import os
+import random
 import time
-from urllib.request import urlopen
-import json
+
+import numpy as np
 import pandas as pd
-from urllib.error import URLError, HTTPError
-# start_date = '2019-10-15T00:00:00'
-# extent = 86400  # one hour (86400 for one day)
+from joblib import Parallel, delayed
+from tqdm import tqdm
 
+__all__ = ["download_supermag"]
 
-def get_smag_stations(start_date, extent, userid="lompe"):
-    """ inventory of stations that have data for the given time range
-
-    Args:
-        start_date (str): eg. '2019-10-15T00:00:00'
-        extent (int): eg. 86400 for one day
-        userid (str, optional): _description_. Defaults to "lompe". plese use your own userid if you have one (please register if not), to avoid hitting SuperMAG limits.
-
-    Returns:
-        list: list of IAGA station codes (e.g. ['AAA', 'ABK', ...])
-    """
-    urlstr = f"https://supermag.jhuapl.edu/services/inventory.php?fmt=json&logon={userid}&start={start_date}&extent={extent}"
-    with urlopen(urlstr) as response:
-        data_response = response.read()
-        data = data_response.decode('utf-8').split('\n')
-
-    # removing ('OK', empty strings)
-    json_parts = [x for x in data if x.strip() not in ("OK", "")]
-    # the first part is the number of stations, so we skip it
-    return json_parts[1:]
-
-
-def get_smag_station_data(start_date, extent, station, userid="lompe", retries=5, backoff_factor=0.5):
-    """_summary_
-
-    Args:
-        start_date (str): eg. '2019-10-15T00:00:00'
-        extent (int): eg. 86400 for one day
-        station (str): eg. 'ABK'
-        userid (str, optional): _description_. Defaults to "lompe".
-        retries (int, optional): _description_. Defaults to 5.
-        sleep (int, optional): _description_. Defaults to 2.
-
-    Raises:
-        ValueError: _description_
-
-    Returns:
-        pandas dataframe: dataframe with columns ['tval', 'glat', 'glon', 'N.geo', 'E.geo', 'Z.geo', 'station'] and datetime index
-    """
-    data_url = (
-        f"https://supermag.jhuapl.edu/services/data-api.php?fmt=json&logon={userid}&start={start_date}&extent={extent}&geo&station={station}"
+try:
+    from supermag_api.supermag_api import *
+except ImportError:
+    raise ImportError(
+        "supermag-api is not installed. Install it with:\n\n"
+        "pip install supermag-api"
     )
 
+
+def download_supermag(
+    event,
+    userid="lompe",
+    tempfile_path="./",
+    save=True,
+    inventory_extent=3600,
+    data_extent=86400,
+    max_workers=5,
+    retries=5,
+    backoff_factor=0.5,
+    max_retry_rounds=4,
+):
+    """Download SuperMAG geogrpahic magnetic field data for one event day.
+
+    This is the public entry point for the module. It downloads all available
+    high-latitude SuperMAG stations for the requested day, retries failed
+    stations in bounded rounds, converts the output to Lompe-style columns, and
+    optionally saves the result as an HDF5 file.
+
+    Args:
+        event (str): Date string in ``YYYY-MM-DD`` format.
+        userid (str): SuperMAG user id.
+        tempfile_path (str): Output directory if ``save=True``.
+        save (bool): If True, save to HDF5 and return the filepath.
+        inventory_extent (int): Inventory search window in seconds.
+        data_extent (int): Station data window in seconds.
+        max_workers (int): Number of joblib thread workers.
+        retries (int): Retries per inventory or station request.
+        backoff_factor (float): Exponential backoff base in seconds.
+        max_retry_rounds (int): Maximum retry rounds over failed stations.
+
+    Returns:
+        str | pandas.DataFrame | None:
+            - saved filepath if ``save=True`` and successful
+            - dataframe if ``save=False`` and successful
+            - ``None`` if stations still fail after all retry rounds
+    """
+    # tempfile_path = os.path.abspath(tempfile_path)
+    os.makedirs(tempfile_path, exist_ok=True)
+
+    savefile = os.path.join(
+        tempfile_path,
+        event.replace("-", "") + "_supermag.h5",
+    )
+
+    if save and os.path.isfile(savefile):
+        print("File already exists at: ", savefile)
+        return savefile
+
+    start = [int(x) for x in event.split("-")] + [0, 0]
+
+    try:
+        all_data, failed = _get_supermag_all_stations(
+            userid=userid,
+            start=start,
+            inventory_extent=inventory_extent,
+            data_extent=data_extent,
+            max_workers=max_workers,
+            retries=retries,
+            backoff_factor=backoff_factor,
+            show_progress=True,
+        )
+
+        retry_round = 0
+        while failed and retry_round < max_retry_rounds:
+            retry_round += 1
+            print(
+                f"Retry round {retry_round}/{max_retry_rounds} for "
+                f"{len(failed)} failed stations."
+            )
+            retry_data, still_failed = _get_supermag_all_stations(
+                userid=userid,
+                start=start,
+                stations=failed,
+                inventory_extent=inventory_extent,
+                data_extent=data_extent,
+                max_workers=max_workers,
+                retries=retries,
+                backoff_factor=backoff_factor,
+                show_progress=True,
+            )
+
+            if not retry_data.empty:
+                all_data = pd.concat(
+                    [all_data, retry_data], axis=0).sort_index()
+
+            failed = still_failed
+
+        if failed:
+            print(
+                f"Some stations failed after {max_retry_rounds} retry rounds. "
+                "Please run it again."
+            )
+            return None
+
+        df_final = (
+            all_data.rename(
+                columns={
+                    "glat": "lat",
+                    "glon": "lon",
+                    "N_geo": "Bn",
+                    "E_geo": "Be",
+                    "Z_geo": "Bu",
+                }
+            )[["Be", "Bn", "Bu", "lat", "lon", "station"]]
+            .dropna()
+            .sort_index()
+        )
+
+        # SuperMAG Z is positive downward; Lompe wants upward.
+        df_final["Bu"] = -df_final["Bu"]
+
+        if save:
+            df_final.to_hdf(savefile, key="df_final", mode="w")
+            print(f"Success: saved to {savefile}")
+            return savefile
+
+        print("Success")
+        return df_final
+
+    except Exception:
+        print("Download failed after all tries. Please run it again.")
+        return None
+
+
+def _get_supermag_inventory(userid, start, extent=3600, retries=5, backoff_factor=0.5):
     last_error = None
 
     for attempt in range(retries):
         try:
-            with urlopen(data_url, timeout=60) as response:
-                text = response.read().decode("utf-8").strip()
+            status, stations = SuperMAGGetInventory(userid, start, extent)
 
-            lines = text.splitlines()
-            json_parts = [x for x in lines if x.strip() not in ("OK", "")]
-            json_str = "".join(json_parts).strip()
+            if stations is None or len(stations) == 0:
+                raise ValueError("No stations returned")
 
-            if not json_str:
-                raise ValueError(f"Empty response for station {station}")
+            return stations
 
-            parsed = json.loads(json_str)
+        except Exception as e:
+            last_error = e
+            wait = backoff_factor * (2 ** attempt)
+            time.sleep(wait + random.uniform(0, 0.5))
 
-            df = (
-                pd.json_normalize(parsed)
-                .assign(datetime=lambda x: pd.to_datetime(x["tval"], unit="s", utc=True))
+    raise RuntimeError(
+        f"Inventory failed after {retries} attempts. Last error: {last_error}"
+    )
+
+
+def _get_supermag_station_data(
+    userid,
+    start,
+    station,
+    extent=86400,
+    retries=5,
+    backoff_factor=0.5,
+):
+    def is_valid_data(data):
+        if not isinstance(data, pd.DataFrame):
+            return False
+        if data.empty:
+            return False
+
+        required = {"tval", "N", "E", "Z"}
+        if not required.issubset(data.columns):
+            return False
+
+        first_cell = str(data.iloc[0, 0])
+        bad_patterns = [
+            "<br",
+            "Warning",
+            "shell_exec",
+            "Fatal error",
+            "Notice:",
+            "Undefined",
+        ]
+
+        if any(pattern in first_cell for pattern in bad_patterns):
+            return False
+
+        for col in ["N", "E", "Z"]:
+            vals = data[col].dropna()
+            if vals.empty:
+                return False
+
+            first_val = vals.iloc[0]
+            if not isinstance(first_val, dict):
+                return False
+            if "geo" not in first_val:
+                return False
+
+        return True
+
+    for attempt in range(retries):
+        try:
+            status, data = SuperMAGGetData(
+                userid,
+                start,
+                extent,
+                "geo",
+                station,
+            )
+
+            if not is_valid_data(data):
+                raise ValueError("Invalid or corrupted SuperMAG response")
+
+            data["N_geo"] = data["N"].apply(lambda x: x["geo"])
+            data["E_geo"] = data["E"].apply(lambda x: x["geo"])
+            data["Z_geo"] = data["Z"].apply(lambda x: x["geo"])
+
+            if "nez" in data["N"].dropna().iloc[0]:
+                data["N_nez"] = data["N"].apply(lambda x: x["nez"])
+                data["E_nez"] = data["E"].apply(lambda x: x["nez"])
+                data["Z_nez"] = data["Z"].apply(lambda x: x["nez"])
+
+            data = (
+                data.drop(columns=["N", "E", "Z"])
+                .assign(
+                    datetime=lambda df: pd.to_datetime(
+                        df["tval"],
+                        unit="s",
+                        origin="unix",
+                        utc=True,
+                    ),
+                    station=station,
+                )
+                .drop(columns="tval")
                 .set_index("datetime")
             )
 
-            df["station"] = station
-            return df
+            return data
 
-        except (json.JSONDecodeError, ValueError, HTTPError, URLError, TimeoutError) as e:
-            last_error = e
-            wait_time = backoff_factor * (2 ** attempt)
+        except Exception:
+            wait = backoff_factor * (2 ** attempt)
+            time.sleep(wait + random.uniform(0, 0.5))
 
-            print(
-                f"Attempt {attempt + 1} failed for {station}: {e}. "
-                f"Retrying in {wait_time:.1f}s..."
+    return None
+
+
+def _get_supermag_all_stations(
+    userid,
+    start,
+    stations=None,
+    inventory_extent=3600,
+    data_extent=86400,
+    max_workers=5,
+    retries=5,
+    backoff_factor=0.5,
+    show_progress=True,
+):
+    if stations is None:
+        stations = _get_supermag_inventory(
+            userid=userid,
+            start=start,
+            extent=inventory_extent,
+            retries=retries,
+            backoff_factor=backoff_factor,
+        )
+        smag_stations = pd.read_csv(
+            "/Users/fasilkebede/Documents/LOMPE/substorm/supermag_stations_info.csv"
+        )
+        high_lat = smag_stations[smag_stations["GEOLAT"] >= 50]
+        stations = np.intersect1d(stations, high_lat["IAGA"].values)
+
+    results = []
+    failed = []
+
+    def fetch_station(station):
+        try:
+            df = _get_supermag_station_data(
+                userid,
+                start,
+                station,
+                data_extent,
+                retries,
+                backoff_factor,
             )
+            return station, df
+        except Exception:
+            return station, None
 
-            time.sleep(wait_time)
+    iterator = Parallel(
+        n_jobs=max_workers,
+        prefer="threads",
+        return_as="generator_unordered",
+    )(delayed(fetch_station)(station) for station in stations)
 
-    raise RuntimeError(
-        f"Failed to retrieve data for station {station} "
-        f"after {retries} attempts. Last error: {last_error}"
-    )
-    return pd.DataFrame()
+    if show_progress:
+        iterator = tqdm(
+            iterator,
+            total=len(stations),
+            desc="Downloading SuperMAG",
+            unit="station",
+        )
 
+    for station, df in iterator:
+        if df is None:
+            failed.append(station)
+        else:
+            results.append(df)
 
-def download_supermag(event, userid="lompe", n_jobs=-1, save=True, tempfile_path="./"):
-    """ downlaod supermag data for a given event (YYYY-MM-DD format string, e.g. '2019-10-15') and return a Lompe-style dataframe with columns ['Be', 'Bn', 'Bu', 'lat', 'lon', 'station'], all geogrpahic (B components and station location) and datetime index. If save=True, saves the dataframe as an h5 file in the given tempfile_path and returns the file path instead.
+    if results:
+        all_data = pd.concat(results, axis=0).sort_index()
+    else:
+        all_data = pd.DataFrame()
 
-    Helper functions:
-    - get_smag_stations: inventory of stations that have data for the given time range
-    - get_smag_station_data: download data for a given station and return as dataframe
-
-    Args:
-        event (_type_): YYYY-MM-DD format string, e.g. '2019-10-15'
-        userid (str, optional): Defaults to "lompe".
-        n_jobs (int, optional): Defaults to -1.
-        save (bool, optional): Defaults to False.
-        tempfile_path (str, optional): Path to check if the file already exists (to avoid downloading it again) Defaults to "./".
-
-    Raises:
-        RuntimeError: if no station data downloaded successfully
-
-    Returns:
-        if save=true: event_supermag.h5 file
-        if save=false: pandas dataframe with columns ['Be', 'Bn', 'Bu', 'lat', 'lon', 'station'] and datetime index
-    """
-    start = event + "T00:00:00"
-    extent = 86400
-    savefile = os.path.join(
-        tempfile_path, event.replace("-", "") + "_supermag.h5")
-
-    if save and os.path.isfile(savefile):
-        print(f"File {savefile} already exists at {tempfile_path}.")
-        return savefile
-
-    stations = get_smag_stations(start, extent, userid=userid)
-
-    dfs = Parallel(n_jobs=n_jobs, verbose=10)(
-        delayed(get_smag_station_data)(start, extent, station, userid)
-        for station in stations
-    )
-
-    # remove failed / empty downloads
-    dfs = [df for df in dfs if df is not None and not df.empty]
-
-    if not dfs:
-        raise RuntimeError("No station data downloaded successfully.")
-
-    # combine all stations into one dataframe and replace SuperMAG bad values with NaN
-    df_combined = pd.concat(dfs, axis=0).sort_index()
-    df_combined = df_combined.replace(999999.0, np.nan)
-
-    # final Lompe-style dataframe (taking only the nez components and renaming columns)
-    df_final = (
-        df_combined
-        .rename(columns={
-            "glat": "lat",
-            "glon": "lon",
-            "N.geo": "Bn",
-            "E.geo": "Be",
-            "Z.geo": "Bu",
-        })
-        [["Be", "Bn", "Bu", "lat", "lon", "station"]]
-        .dropna()
-        .sort_index()
-    )
-
-    # SuperMAG Z is positive downward; Lompe wants upward
-    df_final["Bu"] = -df_final["Bu"]
-
-    if save:
-        df_final.to_hdf(savefile, key="df_final", mode="w")
-        return savefile
-
-    return df_final
+    return all_data, failed

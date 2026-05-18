@@ -120,7 +120,7 @@ def download_iridium(event, basepath='./', tempfile_path='./'):
     savefile = tempfile_path + event.replace('-', '') + '_iridium.h5'
     raw_file_name = basepath + event.replace('-', '') + '_iridium.nc'
     if os.path.isfile(savefile) and os.path.getsize(savefile) > 0:
-        print(f"File {savefile} already exists at {tempfile_path}.")
+        print(f"File already exists at: {savefile}.")
         return savefile
     elif os.path.isfile(raw_file_name) and os.path.getsize(raw_file_name) > 0:
         print(

@@ -44,7 +44,8 @@ def download_champ(event, basepath='./', tempfile_path='./'):
                     f"Failed to download the file. Status code: {response.status_code}")
                 return None
         except Exception as e:
-            print(f"No champ data in this period: {e}")
+            print(
+                f"No champ data: Champ data available (2000-07-19 to 2010-09-17), returning: {e}")
             return None
 
     # Process the downloaded CDF file ot get the magnetic disturbance
