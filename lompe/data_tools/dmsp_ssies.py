@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 
 def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
@@ -34,7 +35,7 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
     savefile = tempfile_path + \
         event.replace('-', '') + '_ssies_f' + str(sat) + '.h5'
     if os.path.exists(savefile):
-        print('File already exists')
+        print(f'DMSP/SSIES F{sat} file already exists at {savefile}')
         return savefile
 
     date_str = event.replace('-', '')
@@ -42,6 +43,8 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
     url_base = "https://cedar.openmadrigal.org"
     url = url_base + \
         f"/ftp/fullname/{madrigal_kwargs['user_fullname']}/email/{madrigal_kwargs['user_email']}/affiliation/{madrigal_kwargs['user_affiliation']}/kinst/8100/year/{year}/"
+
+    pbar = tqdm(total=100, desc=f"Downloading DMSP/SSIES F{sat} for {event}")
 
     response2 = requests.get(url)
     soup2 = BeautifulSoup(response2.content, 'html.parser')
@@ -54,6 +57,8 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
         'a', href=True) if 'plasma temp' in a.text and f'F{sat}' in a.text][0]
     # url_flux_energy = url_base + [a['href'] for a in soup2.find_all(
     #     'a', href=True) if 'flux/energy' in a.text and f'F{sat}' in a.text][0]
+
+    pbar.update(10)
 
     # downloading the ion drift file
     ion_drift_hdf5_file_url = url_ion_drift + 'format/hdf5/'
@@ -70,6 +75,8 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
             if chunk:  # Filter out keep-alive new chunks
                 file.write(chunk)
 
+    pbar.update(35)
+    
     # downloading the plasma temperature file
     plasma_hdf5_file_url = url_plasma_temp + 'format/hdf5/'
     response2 = requests.get(plasma_hdf5_file_url)
@@ -84,6 +91,8 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
         for chunk in response.iter_content(chunk_size=65536):
             if chunk:  # Filter out keep-alive new chunks
                 file.write(chunk)
+
+    pbar.update(35)
 
     dmsp = pd.read_hdf(filename, mode='r', key='Data/Table Layout')
     dmsp2 = pd.read_hdf(filename2, mode='r', key='Data/Table Layout')
@@ -169,4 +178,9 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
     ddd.to_hdf(savefile, key='df', mode='w')
     os.remove(filename)
     os.remove(filename2)
+
+    pbar.update(20)
+
+    print(f"DMSP/SSIES F{sat} - Download complete: {savefile}")
+
     return savefile

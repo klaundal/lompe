@@ -641,7 +641,7 @@ def read_smag(event, basepath='./', tempfile_path='./', file_name=''):
         raise ValueError('Something went wrong.')
 
 
-def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
+def read_iridium(event, basepath='./', tempfile_path='./', file_name='', pbar=None):
     """
     Convert netcdf files (dB raw) downladed from the AMPERE website (http://ampere.jhuapl.edu/dataraw/index.html) 
     to format used by Lompe.
@@ -708,6 +708,9 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
 
     iridset = xr.load_dataset(fn, engine='netcdf4')
 
+    if pbar:
+        pbar.update(pbar.total - pbar.n - 50)
+
     # parse date from event string. For older AMPERE files, date was parsed from
     # the title, but that is no longer possible in the newer files.
     # datestr = ''.join([c for c in iridset.title if c.isnumeric()])
@@ -726,6 +729,9 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
     irid_dt = Time([dt.datetime(year, month, day, h, m, s)
                    for h, m, s in zip(hh, mm, ss)])
 
+    if pbar:
+        pbar.update(pbar.total - pbar.n - 40)
+
     # get satellite position in new coordinate system
     cart_pos = coord.CartesianRepresentation(iridset.pos_eci.values.T[0],
                                              iridset.pos_eci.values.T[1],
@@ -734,6 +740,9 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
 
     gcrs_pos = coord.GCRS(cart_pos, obstime=irid_dt)
     itrs_pos = gcrs_pos.transform_to(coord.ITRS(obstime=irid_dt))
+
+    if pbar:
+        pbar.update(pbar.total - pbar.n - 30)
 
     # get space mag obs in new coordinate system
     if 'b_eci' in iridset:
@@ -753,6 +762,9 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
     lon = itrs_pos.spherical.lon.value
     r = itrs_pos.spherical.distance.value
 
+    if pbar:
+        pbar.update(pbar.total - pbar.n - 20)
+
     # convert space mag obs to east, north, up
     e = np.vstack((- np.sin(lon * d2r),
                   np.cos(lon * d2r), np.zeros_like(lon)))
@@ -766,11 +778,21 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name=''):
     Bn = n[0] * Bx_ecef + n[1] * By_ecef + n[2] * Bz_ecef
     Bu = u[0] * Bx_ecef + u[1] * By_ecef + u[2] * Bz_ecef
 
+    if pbar:
+        pbar.update(pbar.total - pbar.n - 10)
+
     # dataframe for saving
     df = pd.DataFrame({'time': irid_dt.value, 'B_e': Be, 'B_n': Bn, 'B_r': Bu, 'B_err': iridset.b_error.values,
                        'lat': lat, 'lon': lon, 'r': r})
     df.to_hdf(savefile, key='df', mode='w')
-    print('Iridium file saved: ' + savefile)
+    # print('Iridium file saved: ' + savefile)
+
+    os.remove(basepath + event.replace('-', '') + '_iridium.nc')
+
+    if pbar:
+        pbar.update(pbar.total - pbar.n)
+
+    print(f"Iridium/AMPERE - Download complete: {savefile}")
 
     return savefile
 

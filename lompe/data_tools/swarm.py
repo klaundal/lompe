@@ -1,9 +1,10 @@
 import os
 import datetime as dt
 import pandas as pd
+from tqdm import tqdm
 
 
-def download_swarm(event, tempfile_path='./'):
+def download_swarm_mag(event, tempfile_path='./'):
     """Download Swarm data for a given event date.
 
     Args:
@@ -18,10 +19,10 @@ def download_swarm(event, tempfile_path='./'):
         2. The request needs an access token from the Swarm website. Visit https://viresclient.readthedocs.io/en/latest/config_details.html.
     """
 
-    savefile = tempfile_path + event.replace('-', '') + '_swarm.h5'
+    savefile = tempfile_path + event.replace('-', '') + '_swarm_mag.h5'
 
     if os.path.isfile(savefile):
-        print(f"File {savefile} already exists at {tempfile_path}.")
+        print(f"Swarm MAG file already exists at {savefile}.")
         return savefile
 
     try:
@@ -36,20 +37,21 @@ def download_swarm(event, tempfile_path='./'):
         for line in lines:
             if line.startswith("token ="):
                 token_value = line.split('=', 1)[1].strip()
-                if token_value:
-                    print("Swarm token is present:", token_value)
+                # if token_value:
+                #     print("Swarm token is present:", token_value)
     except:
         print("Token is missing or empty. \nPlease visit https://viresclient.readthedocs.io/en/latest/config_details.html to configure it")
         return
     try:
         request = SwarmRequest()
-
         event_start = dt.datetime.strptime(event, '%Y-%m-%d')
         event_end = event_start + \
             dt.timedelta(hours=23, minutes=59, seconds=59)
         df = pd.DataFrame()
 
-        for swarm_satellite in ['A', 'B', 'C']:
+        satellites = ['A', 'B', 'C']
+        for swarm_satellite in tqdm(satellites, desc=f"Downloading Swarm MAG data for {event}"):
+        # for swarm_satellite in ['A', 'B', 'C']:
             request.set_collection(f"SW_OPER_MAG{swarm_satellite}_LR_1B")
             request.set_products(
                 measurements=["F", "B_NEC"],
@@ -63,6 +65,7 @@ def download_swarm(event, tempfile_path='./'):
                 end_time=event_end,
                 show_progress=False
             )
+            
             df = pd.concat([df, data.as_dataframe(expand=True)])
 
         # Removing the background field from IGRF
@@ -72,8 +75,11 @@ def download_swarm(event, tempfile_path='./'):
         df['B_u'] = -(df['B_NEC_C'] - df['B_NEC_IGRF_C'])
 
         df.sort_values(by='Timestamp', inplace=True)
-        df.reset_index(inplace=True)
+        # df.reset_index(inplace=True)
         df.to_hdf(savefile, key='df', mode='w')
+
+        print(f"Swarm MAG - Download complete: {savefile}")
+        
         return savefile
 
     except Exception as e:
