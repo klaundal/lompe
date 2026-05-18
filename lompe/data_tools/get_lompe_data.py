@@ -9,7 +9,7 @@ from .supermag import download_supermag
 from .ampere import download_iridium
 from .champ import download_champ
 from .superdarn import download_sdarn
-from .swarm import download_swarm
+from .swarm import download_swarm_mag
 from .dmsp_ssies import download_dmsp_ssies
 
 
