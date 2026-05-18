@@ -126,14 +126,14 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
 
     # latitude (geodetic)
     tck = interpolate.splrep(matplotlib.dates.date2num(dmsp.index[::60].append(dmsp.index[-1:])),
-                            pd.concat([dmsp.gdlat[::60], (dmsp.gdlat[-1:])]).values, k=2)
+                             pd.concat([dmsp.gdlat[::60], (dmsp.gdlat[-1:])]).values, k=2)
     gdlat = interpolate.splev(matplotlib.dates.date2num(dmsp.index), tck)
 
     # longitude (geodetic)
     negs = dmsp.glon < 0
     dmsp.loc[negs, 'glon'] = dmsp.glon[negs] + 360
     tck = interpolate.splrep(matplotlib.dates.date2num(dmsp.index[::60].append(dmsp.index[-1:])),
-                            pd.concat([dmsp.glon[::60], (dmsp.glon[-1:])]).values, k=2)
+                             pd.concat([dmsp.glon[::60], (dmsp.glon[-1:])]).values, k=2)
     glon = interpolate.splev(matplotlib.dates.date2num(dmsp.index), tck)
 
     # i got negative and above 360 values even negative are excluded before the interpolation, due to the interpolation, handling it here
@@ -142,7 +142,7 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
 
     # altitude (geodetic)
     tck = interpolate.splrep(matplotlib.dates.date2num(dmsp.index[::60].append(dmsp.index[-1:])),
-                            pd.concat([dmsp.gdalt[::60], (dmsp.gdalt[-1:])]).values, k=2)
+                             pd.concat([dmsp.gdalt[::60], (dmsp.gdalt[-1:])]).values, k=2)
     gdalt = interpolate.splev(matplotlib.dates.date2num(dmsp.index), tck)
 
     # get eastward and northward component of cross track direction

@@ -88,10 +88,9 @@ def download_sdarn_files(event, basepath='./', pbar=None):
 def download_sdarn(event, basepath='./', tempfile_path='./'):
     # tempfile_path = '/Users/fasilkebede/Documents/LOMPE/Data/SuperDARN/'
     # event = '2019-02-25'
-    
+
     savefile = tempfile_path + event.replace('-', '') + '_superdarn_grdmap.h5'
     if os.path.isfile(savefile):
-        print(f"SuperDARN file already exists at {savefile}.")
         return savefile
     else:
         from lompe.data_tools.dataloader import radar_losvec_from_mag

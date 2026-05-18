@@ -9,11 +9,11 @@ from .supermag import download_supermag
 from .ampere import download_iridium
 from .champ import download_champ
 from .superdarn import download_sdarn
-from .swarm import download_swarm
+from .swarm import download_swarm_mag
 from .dmsp_ssies import download_dmsp_ssies
 
 
-def prepare_event_data(event, data_path="./lompe_data/", sources=None, basepath="./", **kwargs):
+def prepare_event_data(event, data_path="./sample_dataset/", sources=None, basepath="./sample_dataset/", **kwargs):
     """
     Download and load all event datasets once.
     Returns dict with {supermag, superdarn, champ} as DataFrames.
@@ -93,7 +93,8 @@ def get_data_subsets(event_data, event, delta_minutes=2, sources=None, **kwargs)
     irid = iridium[(iridium.time >= t0) & (iridium.time <= t1)]
 
     if not irid.empty:
-        irid_B = np.vstack((irid.B_e.values, irid.B_n.values, irid.B_r.values))
+        irid_B = np.vstack(
+            (irid.B_e.values, irid.B_n.values, irid.B_r.values))
         irid_coords = np.vstack(
             (irid.lon.values, irid.lat.values, irid.r.values))
     else:

@@ -70,6 +70,7 @@ def download_iridium_raw(event, basepath='./'):
     # checks if file already exists
     # checking if the file is not empty
     if os.path.isfile(savefile) and os.path.getsize(savefile) > 0:
+        print(f"File {savefile} already exists at {basepath}.")
         return savefile
         # return read_iridium(event, basepath='./', tempfile_path='./', file_name='')
     else:
@@ -78,7 +79,8 @@ def download_iridium_raw(event, basepath='./'):
         urlstr = ampere_coreurl('data-rawdB.php', 'lompe', start, duration)
         # headers = {"User-Agent": "Mozilla/5.0"}
         # verify=certifi.where())
-        response = requests.get(urlstr, verify=certifi.where(), stream=True)
+        response = requests.get(
+            urlstr, verify=certifi.where(), stream=True)
 
         # Check if the request was successful
         if response.status_code == 200:
