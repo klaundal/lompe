@@ -273,12 +273,8 @@ def _get_supermag_all_stations(
             retries=retries,
             backoff_factor=backoff_factor,
         )
-        from importlib.resources import files
-        csv_path = files("lompe.data").joinpath("supermag_stations.csv")
-        smag_stations = pd.read_csv(csv_path)
-        # smag_stations = pd.read_csv(
-        #     "/Users/fasilkebede/Documents/LOMPE/substorm/supermag_stations_info.csv"
-        # )
+        filepath = os.path.dirname(__file__)
+        smag_stations = pd.read_csv(filepath + '/../data/supermag_stations.csv')
         high_lat = smag_stations[smag_stations["GEOLAT"] >= 50]
         stations = np.intersect1d(stations, high_lat["IAGA"].values)
 
