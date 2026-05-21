@@ -70,7 +70,7 @@ def download_iridium_raw(event, basepath='./'):
     # checks if file already exists
     # checking if the file is not empty
     if os.path.isfile(savefile) and os.path.getsize(savefile) > 0:
-        print(f"File {savefile} already exists at {basepath}.")
+        print(f"Iridium/AMPERE raw file {savefile} already exists at {basepath}")
         return savefile
         # return read_iridium(event, basepath='./', tempfile_path='./', file_name='')
     else:

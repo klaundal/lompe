@@ -22,7 +22,7 @@ def download_swarm_mag(event, tempfile_path='./'):
     savefile = tempfile_path + event.replace('-', '') + '_swarm_mag.h5'
 
     if os.path.isfile(savefile):
-        print(f"Swarm MAG file already exists at {savefile}.")
+        print(f"Swarm MAG file already exists at {savefile}")
         return savefile
 
     try:
@@ -56,7 +56,7 @@ def download_swarm_mag(event, tempfile_path='./'):
             request.set_products(
                 measurements=["F", "B_NEC"],
                 models=["IGRF", "MCO_SHA_2D"],
-                sampling_step="PT10S",  # 10 seconds if needed PT1M for 1 minute
+                sampling_step="PT5S",  # 10 seconds if needed PT1M for 1 minute
                 # quasi-dipole latitude and longitude
                 auxiliaries=["MLT", "OrbitNumber", 'QDLat', 'QDLon']
             )
