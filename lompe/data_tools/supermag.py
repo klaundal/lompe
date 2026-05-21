@@ -64,12 +64,12 @@ def download_supermag(
     )
 
     if save and os.path.isfile(savefile):
-        print("File already exists at: ", savefile)
+        print("SuperMAG file already exists at: ", savefile)
         return savefile
 
     start = [int(x) for x in event.split("-")] + [0, 0]
 
-    try:
+    try: 
         all_data, failed = _get_supermag_all_stations(
             userid=userid,
             start=start,
@@ -85,8 +85,8 @@ def download_supermag(
         while failed and retry_round < max_retry_rounds:
             retry_round += 1
             print(
-                f"Retry round {retry_round}/{max_retry_rounds} for "
-                f"{len(failed)} failed stations."
+                f"SuperMAG - Retry round {retry_round}/{max_retry_rounds} for "
+                f"{len(failed)} failed stations"
             )
             retry_data, still_failed = _get_supermag_all_stations(
                 userid=userid,
@@ -132,14 +132,13 @@ def download_supermag(
 
         if save:
             df_final.to_hdf(savefile, key="df_final", mode="w")
-            print(f"Success: saved to {savefile}")
+            print(f"SuperMAG - Download complete: {savefile}")
             return savefile
 
-        print("Success")
         return df_final
 
     except Exception:
-        print("Download failed after all tries. Please run it again.")
+        print("SuperMAG download failed after all tries. Please run it again.")
         return None
 
 
@@ -161,7 +160,7 @@ def _get_supermag_inventory(userid, start, extent=3600, retries=5, backoff_facto
             time.sleep(wait + random.uniform(0, 0.5))
 
     raise RuntimeError(
-        f"Inventory failed after {retries} attempts. Last error: {last_error}"
+        f"SuperMAG inventory failed after {retries} attempts. Last error: {last_error}"
     )
 
 
@@ -274,9 +273,12 @@ def _get_supermag_all_stations(
             retries=retries,
             backoff_factor=backoff_factor,
         )
-        smag_stations = pd.read_csv(
-            "/Users/fasilkebede/Documents/LOMPE/substorm/supermag_stations_info.csv"
-        )
+        from importlib.resources import files
+        csv_path = files("lompe.data").joinpath("supermag_stations.csv")
+        smag_stations = pd.read_csv(csv_path)
+        # smag_stations = pd.read_csv(
+        #     "/Users/fasilkebede/Documents/LOMPE/substorm/supermag_stations_info.csv"
+        # )
         high_lat = smag_stations[smag_stations["GEOLAT"] >= 50]
         stations = np.intersect1d(stations, high_lat["IAGA"].values)
 
@@ -303,11 +305,12 @@ def _get_supermag_all_stations(
         return_as="generator_unordered",
     )(delayed(fetch_station)(station) for station in stations)
 
+    event = f"{start[0]:04d}-{start[1]:02d}-{start[2]:02d}"
     if show_progress:
         iterator = tqdm(
             iterator,
             total=len(stations),
-            desc="Downloading SuperMAG",
+            desc=f"Downloading SuperMAG data for {event}",
             unit="station",
         )
 
