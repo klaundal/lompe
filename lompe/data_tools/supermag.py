@@ -67,12 +67,12 @@ def download_supermag(
         print("SuperMAG file already exists at: ", savefile)
         return savefile
 
-    start = [int(x) for x in event.split("-")] + [0, 0]
+    # start = [int(x) for x in event.split("-")] + [0, 0]
 
-    try: 
+    try:
         all_data, failed = _get_supermag_all_stations(
             userid=userid,
-            start=start,
+            start=event,
             inventory_extent=inventory_extent,
             data_extent=data_extent,
             max_workers=max_workers,
@@ -90,7 +90,7 @@ def download_supermag(
             )
             retry_data, still_failed = _get_supermag_all_stations(
                 userid=userid,
-                start=start,
+                start=event,
                 stations=failed,
                 inventory_extent=inventory_extent,
                 data_extent=data_extent,
@@ -137,8 +137,9 @@ def download_supermag(
 
         return df_final
 
-    except Exception:
+    except Exception as e:
         print("SuperMAG download failed after all tries. Please run it again.")
+        print(type(e).__name__, ":", e)
         return None
 
 
@@ -274,7 +275,8 @@ def _get_supermag_all_stations(
             backoff_factor=backoff_factor,
         )
         filepath = os.path.dirname(__file__)
-        smag_stations = pd.read_csv(filepath + '/../data/supermag_stations.csv')
+        smag_stations = pd.read_csv(
+            filepath + '/../data/supermag_stations.csv', engine="python", on_bad_lines=lambda row: row[:7] + [",".join(row[7:])])
         high_lat = smag_stations[smag_stations["GEOLAT"] >= 50]
         stations = np.intersect1d(stations, high_lat["IAGA"].values)
 
@@ -301,12 +303,12 @@ def _get_supermag_all_stations(
         return_as="generator_unordered",
     )(delayed(fetch_station)(station) for station in stations)
 
-    event = f"{start[0]:04d}-{start[1]:02d}-{start[2]:02d}"
+    # event = f"{start[0]:04d}-{start[1]:02d}-{start[2]:02d}"
     if show_progress:
         iterator = tqdm(
             iterator,
             total=len(stations),
-            desc=f"Downloading SuperMAG data for {event}",
+            desc=f"Downloading SuperMAG data for {start}",
             unit="station",
         )
 
