@@ -2,7 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import lompe
-from lompe.data_tools import datadownloader, dataloader
+from lompe.data_tools import dataloader
 
 from .dmsp_ssusi import download_ssusi
 from .supermag import download_supermag
