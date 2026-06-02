@@ -55,7 +55,7 @@ def download_swarm_mag(event, tempfile_path='./'):
             request.set_collection(f"SW_OPER_MAG{swarm_satellite}_LR_1B")
             request.set_products(
                 measurements=["F", "B_NEC"],
-                models=["IGRF", "MCO_SHA_2D"],
+                models=["CHAOS"],
                 sampling_step="PT10S",  # 10 seconds if needed PT1M for 1 minute
                 # quasi-dipole latitude and longitude
                 auxiliaries=["MLT", "OrbitNumber", 'QDLat', 'QDLon']
@@ -68,11 +68,11 @@ def download_swarm_mag(event, tempfile_path='./'):
             
             df = pd.concat([df, data.as_dataframe(expand=True)])
 
-        # Removing the background field from IGRF
-        df['B_n'] = df['B_NEC_N'] - df['B_NEC_IGRF_N']
-        df['B_e'] = df['B_NEC_E'] - df['B_NEC_IGRF_E']
+        # Removing the background field from CHAOS
+        df['B_n'] = df['B_NEC_N'] - df['B_NEC_CHAOS_N']
+        df['B_e'] = df['B_NEC_E'] - df['B_NEC_CHAOS_E']
         # Upward is negative in the NEC systema
-        df['B_u'] = -(df['B_NEC_C'] - df['B_NEC_IGRF_C'])
+        df['B_u'] = -(df['B_NEC_C'] - df['B_NEC_CHAOS_C'])
 
         df.sort_values(by='Timestamp', inplace=True)
         # df.reset_index(inplace=True)

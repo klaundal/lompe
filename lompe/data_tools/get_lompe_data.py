@@ -52,7 +52,7 @@ def prepare_event_data(event, data_path="./sample_dataset/", sources=None, basep
         files["superdarn"] = download_sdarn(event, tempfile_path=data_path)
 
     if "swarm" in sources:
-        files["swarm"] = download_swarm(event, tempfile_path=data_path)
+        files["swarm"] = download_swarm_mag(event, tempfile_path=data_path)
     # smag_file = datadownloader.download_supermag(
     #     event, tempfile_path=data_path)
     # sdarn_file = datadownloader.download_sdarn(event, tempfile_path=data_path)
