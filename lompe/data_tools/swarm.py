@@ -1,5 +1,6 @@
 import os
 import datetime as dt
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -84,3 +85,66 @@ def download_swarm_mag(event, tempfile_path='./'):
 
     except Exception as e:
         print(f"An error occurred while processing the Swarm data: {e}")
+
+
+def download_swarm_efi(event, tempfile_path = './', only_good = True):
+    """
+    Download Swarm EFI horizontal cross-track ion flow measurements.
+
+    only_good = True applies strict (I think) quality flags and calibration flag
+    """
+
+    savefile = tempfile_path + event.replace('-', '') + '_swarm_efi_tct.h5'
+
+    if os.path.isfile(savefile):
+        print(f"Swarm EFI TCT file already exists at {savefile}.")
+        return savefile
+
+    try:
+        from viresclient import SwarmRequest
+    except ModuleNotFoundError:
+        print('Please install viresclient using "pip install viresclient"')
+        return
+
+    try:
+        request = SwarmRequest()
+        event_start = dt.datetime.strptime(event, '%Y-%m-%d')
+        event_end = event_start + dt.timedelta(hours=23, minutes=59, seconds=59)
+        df = pd.DataFrame()
+
+        satellites = ['A', 'B', 'C']
+        measurements = ["Viy", "VsatE", "VsatN", "Quality_flags", "Calibration_flags"]
+
+        for swarm_satellite in tqdm(satellites, desc=f"Downloading Swarm EFI TCT data for {event}"):
+            request.set_collection(f"SW_EXPT_EFI{swarm_satellite}_TCT02")
+            request.set_products(measurements = measurements)
+            data = request.get_between(start_time = event_start, end_time = event_end, show_progress = False )
+            df = pd.concat([df, data.as_dataframe()])
+
+        horizontal_speed = np.hypot(df['VsatE'], df['VsatN'])
+        df['le'] =  df['VsatN'] / horizontal_speed
+        df['ln'] = -df['VsatE'] / horizontal_speed
+
+        # quality and calibration flags:
+        quality_flags = df['Quality_flags'].fillna(0).astype('uint16').to_numpy()
+        calibration_flags = df['Calibration_flags'].fillna(0xffffffff).astype('uint32').to_numpy()
+        good_quality = (quality_flags & 4) != 0
+        good_calibration = ((calibration_flags >> 16) & 0xff) == 0
+        good_data = good_calibration & np.isfinite(df['Viy'].to_numpy())
+
+        good_data = good_data & good_quality
+
+        if only_good:
+            df = df[good_data]
+
+        columns = ["Spacecraft", "Latitude", "Longitude", "Radius", "Viy", "le", "ln", "Quality_flags", "Calibration_flags"]
+        df = df[[column for column in columns if column in df.columns]]
+        df.sort_values(by = 'Timestamp', inplace = True)
+        df.to_hdf(savefile, key = 'df', mode = 'w')
+
+        print(f"Swarm EFI - Download complete: {savefile}")
+
+        return savefile
+
+    except Exception as e:
+        print(f"An error occurred while processing the Swarm EFI TCT data: {e}")
