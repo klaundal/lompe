@@ -325,8 +325,7 @@ def hardy(mlat, mlt, kp, hallOrPed='hp'):
         for row in hc.iterrows():
             values = row[1]
             for key in hall_epstein:
-                hall_epstein[key] += values[key] * \
-                    values['trig'](values['n'] * mlt / 12 * np.pi)
+                hall_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
 
         # evaluate the Epstein transition function, Hall:
         r, S1, S2, h0 = hall_epstein['maxvalue'], hall_epstein['up-slope'], hall_epstein['down-slope'], hall_epstein['maxlatitude']
@@ -351,8 +350,7 @@ def hardy(mlat, mlt, kp, hallOrPed='hp'):
         for row in pc.iterrows():
             values = row[1]
             for key in pedersen_epstein:
-                pedersen_epstein[key] += values[key] * \
-                    values['trig'](values['n'] * mlt / 12 * np.pi)
+                pedersen_epstein[key] += values[key] * values['trig'](values['n'] * mlt / 12 * np.pi)
 
         # evaluate the Epstein transition function, Pedersen:
         r, S1, S2, h0 = pedersen_epstein['maxvalue'], pedersen_epstein['up-slope'], pedersen_epstein['down-slope'], pedersen_epstein['maxlatitude']
