@@ -564,7 +564,7 @@ def plot_SECS_amplitudes(ax, model, curl_free = True, **kwargs):
 
 
 def lompeplot(model, figheight = 9, include_data = False, show_data_location= False, apex = None, time = None, 
-                     savekw = None, clkw = {}, quiverscales = None, colorscales = None, 
+                     savekw = None, clkw = {}, suptitle=None, quiverscales = None, colorscales = None, 
                      debug = False, return_axes = False):
     """ produce a summary plot of lompe parameters. 
 
@@ -620,11 +620,22 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     # Set up figures
     # --------------
     ar = model.grid_E.shape[1] / model.grid_E.shape[0] # aspect ratio
-    figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+    
+    # figsize = ((3 * ar + 1)/2 * figheight * .8, figheight)
+    figwidth=(3 * ar + 1)/2 * figheight * .8
+    figsize = (figwidth, figheight)
 
+    area_scale = np.sqrt((figwidth * figheight) / (12 * 9))
+    font_scale = np.clip(area_scale, 0.8, 1.35)
+    
     fig = plt.figure(figsize = figsize)
-    axes = np.vstack(([plt.subplot2grid((20, 4), ( 0, j), rowspan = 10) for j in range(3)],
-                      [plt.subplot2grid((20, 4), (10, j), rowspan = 10) for j in range(3)]))
+    fig.suptitle(suptitle, fontsize=22*font_scale, color="black", y=0.99) 
+
+    row_gap = int(np.clip(0.5 + 2*(1/ar - 1), 0, 3))
+    second_row = 10 + row_gap
+
+    axes = np.vstack(([plt.subplot2grid((20, 4), (0, j), rowspan=10) for j in range(3)],
+                      [plt.subplot2grid((20, 4), (second_row, j), rowspan=10) for j in range(3)]))
     for ax in axes.flatten():
         format_ax(ax, model, apex = apex)
 
@@ -637,7 +648,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
         plot_locations(ax, model, 'convection')
     if include_data:
         plot_datasets(ax, model, 'convection')
-    ax.set_title('Convection velocity and electric potential')
+    ax.set_title('Convection velocity \n and \n electric potential', fontsize=15*font_scale)
 
     # Space magnetic field
     # --------------------
@@ -651,7 +662,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     if include_data:
         plot_datasets(ax, model, 'space_mag_fac')
         plot_datasets(ax, model, 'space_mag_full')
-    ax.set_title('FAC and magnetic field')
+    ax.set_title('FACs \n and magnetic field', fontsize=15*font_scale)
 
     # Ground magnetic field
     # ---------------------
@@ -662,7 +673,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
         plot_locations(ax, model, 'ground_mag')
     if include_data:
         plot_datasets(ax, model, 'ground_mag')
-    ax.set_title('Ground magnetic field')
+    ax.set_title('Ground magnetic field', fontsize=15*font_scale)
 
     # Hall conductance
     # ----------------
@@ -671,7 +682,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     plot_coastlines(ax, model, color = 'grey')
     if time != None and apex != None:
         plot_mlt(ax, model, time, apex, color = 'grey')
-    ax.set_title('Hall conductance')
+    ax.set_title('Hall conductance', fontsize=15*font_scale)
 
     # Pedersen conductance
     # --------------------
@@ -680,13 +691,13 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     plot_coastlines(ax, model, color = 'grey')
     if time != None and apex != None:
         plot_mlt(ax, model, time, apex, color = 'grey')
-    ax.set_title('Pedersen conductance')
+    ax.set_title('Pedersen conductance', fontsize=15*font_scale)
 
     # Current densities
     # -----------------
     ax = axes[1, 2]
     plot_quiver(ax, model, 'electric_current')
-    ax.set_title('Electric currents')
+    ax.set_title('Electric currents', fontsize=15*font_scale)
     if debug:
         plot_SECS_amplitudes(ax, model, curl_free = True)
         plot_quiver(ax, model, 'SECS_current', color = 'C2')
@@ -702,13 +713,17 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
     cbarax1 = plt.subplot2grid((20, 40), (16, 32), rowspan = 1, colspan = 7)
     cbarax2 = plt.subplot2grid((20, 40), (12, 32), rowspan = 1, colspan = 7)
 
-    arrowax = plt.subplot2grid((20, 40), (19, 31), rowspan = 1, colspan = 8)
+    arrowax = plt.subplot2grid((20, 40), (19, 29), rowspan = 1, colspan = 7)
+
+    xshift = np.clip(1.2*(ar - 1), 0, 3)
+    xarrow = 7 + xshift
+    xtext = np.clip(12 + 3*(1/ar - 1), 5, 15) + xshift
 
     arrowax.set_axis_off()
-    arrowax.quiver(.1, .5, 1, 0, scale = 2, scale_units = 'inches')
+    arrowax.quiver(xarrow, .5, 1, 0, scale = 2, scale_units = 'inches')
     arrowax.set_ylim(0, 1)
     arrowax.set_xlim(0, 20)
-    arrowax.text(5, 1, '{:.0f} nT (ground), {:.0f} nT (space)\n{:.0f} mA/m, {:.0f} m/s'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_full'] * 1e9 // 2, quiverscales['electric_current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top')
+    arrowax.text(xtext, 1, '{:.0f} nT (ground), \n {:.0f} nT (space), \n{:.0f} mA/m, {:.0f} m/s'.format(quiverscales['ground_mag'] * 1e9 // 2, quiverscales['space_mag_full'] * 1e9 // 2, quiverscales['electric_current'] * 1e3 // 2, quiverscales['convection'] // 2 ), ha = 'left', va = 'top', fontsize=12*font_scale)
 
     if time != None:
         cbarax2.set_title(str(time) + ' UT', fontweight = 'bold')
@@ -733,7 +748,8 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
 
     # Finish
     # ------
-    plt.subplots_adjust(top=0.91, bottom=0.065, left=0.01, right=0.99, hspace=0.1, wspace=0.02) 
+    top = np.clip(0.91 - 0.06*(1/ar - 1) - 0.018*np.exp(-((ar - 1.33)/0.18)**2), 0.82, 0.91)
+    plt.subplots_adjust(top=top, bottom=0.065, left=0.01, right=0.98) 
 
     if savekw != None:
         plt.savefig(**savekw)
