@@ -6,6 +6,10 @@ import requests
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 
+import warnings
+from tables.path import NaturalNameWarning
+
+warnings.filterwarnings("ignore", category=NaturalNameWarning, message="object name is not a valid Python identifier.*")
 
 def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
     """ Download DMSP SSIES ion drift meter data for a full day
