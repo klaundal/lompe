@@ -113,6 +113,10 @@ def download_supermag(
             )
             return None
 
+        # taking only the geo data, and removing placehoelder values (999999.0) with NaN, then dropping any rows with NaN
+        cols = ["Be", "Bn", "Bu", "lat", "lon", "station"]
+        b_cols = ["Be", "Bn", "Bu"]
+
         df_final = (
             all_data.rename(
                 columns={
@@ -122,14 +126,12 @@ def download_supermag(
                     "E_geo": "Be",
                     "Z_geo": "Bu",
                 }
-            )[["Be", "Bn", "Bu", "lat", "lon", "station"]]
+            )[cols]
+            .replace({col: {999999.0: np.nan} for col in b_cols})
+            .assign(Bu=lambda df: -df["Bu"])  # SuperMAG Z down -> Lompe up
             .dropna()
             .sort_index()
         )
-
-        # SuperMAG Z is positive downward; Lompe wants upward.
-        df_final["Bu"] = -df_final["Bu"]
-
         if save:
             df_final.to_hdf(savefile, key="df_final", mode="w")
             print(f"SuperMAG - Download complete: {savefile}")
