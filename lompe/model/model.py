@@ -389,8 +389,8 @@ class Emodel(object):
                         self._d = np.hstack((self._d, np.hstack(ds.values)))
                         self._w = np.hstack((self._w, w_i))
 
-                    GTG_i = G.T.dot(np.diag(w_i)).dot(G)
-                    GTd_i = G.T.dot(np.diag(w_i)).dot(np.hstack(ds.values))
+                    GTG_i = G.T.dot(G * w_i.reshape((-1, 1)))
+                    GTd_i = G.T.dot(w_i * np.hstack(ds.values))
                     
                     GTGs.append(GTG_i)
                     GTds.append(GTd_i)
@@ -465,7 +465,12 @@ class Emodel(object):
         if 'lapack_driver' not in kwargs.keys():
             kwargs['lapack_driver'] = 'gelsd'
 
-        self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
+        try:
+            c, lower = scipy.linalg.cho_factor(GG, lower=True)
+            self.Cmpost = scipy.linalg.cho_solve((c, lower), np.eye(GG.shape[0]))
+        except scipy.linalg.LinAlgError:
+            warnings.warn(...)
+            self.Cmpost = scipy.linalg.lstsq(GG, np.eye(GG.shape[0]), **kwargs)[0]
         self.Rmatrix = self.Cmpost.dot(self.GTG)
         self.m = self.Cmpost.dot(self.GTd)
 
