@@ -23,7 +23,7 @@ def download_swarm_mag(event, tempfile_path='./'):
     savefile = tempfile_path + event.replace('-', '') + '_swarm_mag.h5'
 
     if os.path.isfile(savefile):
-        print(f"Swarm MAG file already exists at {savefile}")
+        print(f"Swarm MAG file for {event} already exists at {savefile}")
         return savefile
 
     try:
@@ -51,7 +51,7 @@ def download_swarm_mag(event, tempfile_path='./'):
         df = pd.DataFrame()
 
         satellites = ['A', 'B', 'C']
-        for swarm_satellite in tqdm(satellites, desc=f"Downloading Swarm MAG data for {event}"):
+        for swarm_satellite in tqdm(satellites, desc=f"Retrieving Swarm MAG data for {event}"):
         # for swarm_satellite in ['A', 'B', 'C']:
             request.set_collection(f"SW_OPER_MAG{swarm_satellite}_LR_1B")
             request.set_products(
@@ -76,16 +76,19 @@ def download_swarm_mag(event, tempfile_path='./'):
         df['B_u'] = -(df['B_NEC_C'] - df['B_NEC_CHAOS_C'])
 
         df.sort_values(by='Timestamp', inplace=True)
+
+        if df.empty:
+            print(f"No Swarm MAG data available for {event}. No file was created.")
+            return None
+    
         # df.reset_index(inplace=True)
         df.to_hdf(savefile, key='df', mode='w')
-
-        print(f"Swarm MAG - Download complete: {savefile}")
+        print(f"Swarm MAG download complete: {savefile}")
         
         return savefile
 
     except Exception as e:
-        print(f"An error occurred while processing the Swarm data: {e}")
-
+        print(f"Failed to download or process Swarm MAG data: {e}")
 
 def download_swarm_efi(event, tempfile_path = './', only_good = True):
     """
@@ -97,7 +100,7 @@ def download_swarm_efi(event, tempfile_path = './', only_good = True):
     savefile = tempfile_path + event.replace('-', '') + '_swarm_efi_tct.h5'
 
     if os.path.isfile(savefile):
-        print(f"Swarm EFI TCT file already exists at {savefile}.")
+        print(f"Swarm EFI file for {event} already exists at {savefile}.")
         return savefile
 
     try:
@@ -115,7 +118,7 @@ def download_swarm_efi(event, tempfile_path = './', only_good = True):
         satellites = ['A', 'B', 'C']
         measurements = ["Viy", "VsatE", "VsatN", "Quality_flags", "Calibration_flags"]
 
-        for swarm_satellite in tqdm(satellites, desc=f"Downloading Swarm EFI TCT data for {event}"):
+        for swarm_satellite in tqdm(satellites, desc=f"Retrieving Swarm EFI data for {event}"):
             request.set_collection(f"SW_EXPT_EFI{swarm_satellite}_TCT02")
             request.set_products(measurements = measurements)
             data = request.get_between(start_time = event_start, end_time = event_end, show_progress = False )
@@ -130,7 +133,9 @@ def download_swarm_efi(event, tempfile_path = './', only_good = True):
         calibration_flags = df['Calibration_flags'].fillna(0xffffffff).astype('uint32').to_numpy()
         good_quality = (quality_flags & 4) != 0
         good_calibration = ((calibration_flags >> 16) & 0xff) == 0
-        good_data = good_calibration & np.isfinite(df['Viy'].to_numpy())
+        viy = df['Viy'].astype(float).to_numpy()
+        # good_data = good_calibration & np.isfinite(df['Viy'].to_numpy())
+        good_data = good_calibration & np.isfinite(viy)
 
         good_data = good_data & good_quality
 
@@ -140,11 +145,15 @@ def download_swarm_efi(event, tempfile_path = './', only_good = True):
         columns = ["Spacecraft", "Latitude", "Longitude", "Radius", "Viy", "le", "ln", "Quality_flags", "Calibration_flags"]
         df = df[[column for column in columns if column in df.columns]]
         df.sort_values(by = 'Timestamp', inplace = True)
-        df.to_hdf(savefile, key = 'df', mode = 'w')
 
-        print(f"Swarm EFI - Download complete: {savefile}")
+        if df.empty:
+            print(f"No Swarm EFI data available for {event}. No file was created.")
+            return None
+
+        df.to_hdf(savefile, key = 'df', mode = 'w')
+        print(f"Swarm EFI download complete: {savefile}")
 
         return savefile
 
     except Exception as e:
-        print(f"An error occurred while processing the Swarm EFI TCT data: {e}")
+        print(f"Failed to download or process Swarm EFI data: {e}")
