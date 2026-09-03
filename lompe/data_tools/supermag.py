@@ -112,7 +112,7 @@ def download_supermag(event, userid="lompe", n_jobs=-1, save=True, tempfile_path
         tempfile_path, event.replace("-", "") + "_supermag.h5")
 
     if save and os.path.isfile(savefile):
-        print(f"SuperMAG file already exists at {savefile}.")
+        print(f"SuperMAG file for {event} already exists at {savefile}")
         return savefile
     
     stations = get_smag_stations(start, extent, userid=userid)
@@ -152,8 +152,197 @@ def download_supermag(event, userid="lompe", n_jobs=-1, save=True, tempfile_path
 
     print(f"SuperMAG - Download complete: {savefile}")
 
-    if save:
-        df_final.to_hdf(savefile, key="df_final", mode="w")
-        return savefile
+        if save:
+            df_final.to_hdf(savefile, key="df_final", mode="w")
+            print(f"SuperMAG download complete: {savefile}")
+            return savefile
 
-    return df_final
+        return df_final
+
+    except Exception as e:
+        print("SuperMAG download failed after all tries. Please run it again.")
+        print(type(e).__name__, ":", e)
+        return None
+
+
+def _get_supermag_inventory(userid, start, extent=3600, retries=5, backoff_factor=0.5):
+    last_error = None
+
+    for attempt in range(retries):
+        try:
+            status, stations = SuperMAGGetInventory(userid, start, extent)
+
+            if stations is None or len(stations) == 0:
+                raise ValueError("No stations returned")
+
+            return stations
+
+        except Exception as e:
+            last_error = e
+            wait = backoff_factor * (2 ** attempt)
+            time.sleep(wait + random.uniform(0, 0.5))
+
+    raise RuntimeError(
+        f"SuperMAG inventory failed after {retries} attempts. Last error: {last_error}"
+    )
+
+
+def _get_supermag_station_data(
+    userid,
+    start,
+    station,
+    extent=86400,
+    retries=5,
+    backoff_factor=0.5,
+):
+    def is_valid_data(data):
+        if not isinstance(data, pd.DataFrame):
+            return False
+        if data.empty:
+            return False
+
+        required = {"tval", "N", "E", "Z"}
+        if not required.issubset(data.columns):
+            return False
+
+        first_cell = str(data.iloc[0, 0])
+        bad_patterns = [
+            "<br",
+            "Warning",
+            "shell_exec",
+            "Fatal error",
+            "Notice:",
+            "Undefined",
+        ]
+
+        if any(pattern in first_cell for pattern in bad_patterns):
+            return False
+
+        for col in ["N", "E", "Z"]:
+            vals = data[col].dropna()
+            if vals.empty:
+                return False
+
+            first_val = vals.iloc[0]
+            if not isinstance(first_val, dict):
+                return False
+            if "geo" not in first_val:
+                return False
+
+        return True
+
+    for attempt in range(retries):
+        try:
+            status, data = SuperMAGGetData(
+                userid,
+                start,
+                extent,
+                "geo",
+                station,
+            )
+
+            if not is_valid_data(data):
+                raise ValueError("Invalid or corrupted SuperMAG response")
+
+            data["N_geo"] = data["N"].apply(lambda x: x["geo"])
+            data["E_geo"] = data["E"].apply(lambda x: x["geo"])
+            data["Z_geo"] = data["Z"].apply(lambda x: x["geo"])
+
+            if "nez" in data["N"].dropna().iloc[0]:
+                data["N_nez"] = data["N"].apply(lambda x: x["nez"])
+                data["E_nez"] = data["E"].apply(lambda x: x["nez"])
+                data["Z_nez"] = data["Z"].apply(lambda x: x["nez"])
+
+            data = (
+                data.drop(columns=["N", "E", "Z"])
+                .assign(
+                    datetime=lambda df: pd.to_datetime(
+                        df["tval"],
+                        unit="s",
+                        origin="unix",
+                        utc=True,
+                    ),
+                    station=station,
+                )
+                .drop(columns="tval")
+                .set_index("datetime")
+            )
+
+            return data
+
+        except Exception:
+            wait = backoff_factor * (2 ** attempt)
+            time.sleep(wait + random.uniform(0, 0.5))
+
+    return None
+
+
+def _get_supermag_all_stations(
+    userid,
+    start,
+    stations=None,
+    inventory_extent=3600,
+    data_extent=86400,
+    max_workers=5,
+    retries=5,
+    backoff_factor=0.5,
+    show_progress=True,
+):
+    if stations is None:
+        stations = _get_supermag_inventory(
+            userid=userid,
+            start=start,
+            extent=inventory_extent,
+            retries=retries,
+            backoff_factor=backoff_factor,
+        )
+        filepath = os.path.dirname(__file__)
+        smag_stations = pd.read_csv(
+            filepath + '/../data/supermag_stations.csv', engine="python", on_bad_lines=lambda row: row[:7] + [",".join(row[7:])])
+        high_lat = smag_stations[smag_stations["GEOLAT"] >= 50]
+        stations = np.intersect1d(stations, high_lat["IAGA"].values)
+
+    results = []
+    failed = []
+
+    def fetch_station(station):
+        try:
+            df = _get_supermag_station_data(
+                userid,
+                start,
+                station,
+                data_extent,
+                retries,
+                backoff_factor,
+            )
+            return station, df
+        except Exception:
+            return station, None
+
+    iterator = Parallel(
+        n_jobs=max_workers,
+        prefer="threads",
+        return_as="generator_unordered",
+    )(delayed(fetch_station)(station) for station in stations)
+
+    # event = f"{start[0]:04d}-{start[1]:02d}-{start[2]:02d}"
+    if show_progress:
+        iterator = tqdm(
+            iterator,
+            total=len(stations),
+            desc=f"Retrieving SuperMAG data for {start}",
+            unit="station",
+        )
+
+    for station, df in iterator:
+        if df is None:
+            failed.append(station)
+        else:
+            results.append(df)
+
+    if results:
+        all_data = pd.concat(results, axis=0).sort_index()
+    else:
+        all_data = pd.DataFrame()
+
+    return all_data, failed

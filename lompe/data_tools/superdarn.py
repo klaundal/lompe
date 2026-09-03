@@ -91,14 +91,14 @@ def download_sdarn(event, basepath='./', tempfile_path='./'):
     
     savefile = tempfile_path + event.replace('-', '') + '_superdarn_grdmap.h5'
     if os.path.isfile(savefile):
-        print(f"SuperDARN file already exists at {savefile}.")
+        print(f"SuperDARN file for {event} already exists at {savefile}")
         return savefile
     else:
         from lompe.data_tools.dataloader import radar_losvec_from_mag
-        temp_sdarn_path = basepath + f"sdarn_files_{event.replace('-', '')}/"
+        temp_sdarn_path = tempfile_path + f"sdarn_files_{event.replace('-', '')}/"
         os.makedirs(temp_sdarn_path, exist_ok=True)
 
-        with tqdm(total=100, desc=f"Downloading SuperDARN for {event}") as pbar: 
+        with tqdm(total=100, desc=f"Retrieving SuperDARN for {event}") as pbar: 
 
             # download_sdarn_files(event, temp_sdarn_path)
             download_sdarn_files(event, temp_sdarn_path, pbar=pbar)
@@ -158,7 +158,7 @@ def download_sdarn(event, basepath='./', tempfile_path='./'):
 
                 pbar.update(min(40, pbar.total - pbar.n))
 
-                print(f"SuperDARN - Download complete: {savefile}")
+                print(f"SuperDARN download complete: {savefile}")
 
                 return savefile
             except Exception as e:
