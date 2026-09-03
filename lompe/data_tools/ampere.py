@@ -70,7 +70,7 @@ def download_iridium_raw(event, basepath='./'):
     # checks if file already exists
     # checking if the file is not empty
     if os.path.isfile(savefile) and os.path.getsize(savefile) > 0:
-        print(f"Iridium/AMPERE raw file {savefile} already exists at {basepath}")
+        print(f"Iridium/AMPERE raw file (.nc) for {event} already exists at {basepath}")
         return savefile
         # return read_iridium(event, basepath='./', tempfile_path='./', file_name='')
     else:
@@ -119,20 +119,20 @@ def download_iridium(event, basepath='./', tempfile_path='./'):
     if not tempfile_path.endswith('/'):
         tempfile_path += '/'
     savefile = tempfile_path + event.replace('-', '') + '_iridium.h5'
-    raw_file_name = basepath + event.replace('-', '') + '_iridium.nc'
+    raw_file_name = tempfile_path + event.replace('-', '') + '_iridium.nc'
     if os.path.isfile(savefile) and os.path.getsize(savefile) > 0:
-        print(f"Iridium/AMPERE file already exists at {savefile}.")
+        print(f"Iridium/AMPERE file for {event} already exists at {savefile}.")
         return savefile
     elif os.path.isfile(raw_file_name) and os.path.getsize(raw_file_name) > 0:
         print(f"Iridium/AMPERE raw file (.nc) exists - converting to lompe data as {savefile}.")
-        with tqdm(total=100, desc=f"Downloading Iridium/AMPERE for {event}") as pbar: 
-            result = read_iridium(event, basepath=basepath, tempfile_path=tempfile_path, pbar=pbar)
+        with tqdm(total=100, desc=f"Retrieving Iridium/AMPERE data for {event}") as pbar: 
+            result = read_iridium(event, basepath=tempfile_path, tempfile_path=tempfile_path, pbar=pbar)
         return result
     else:
         # print(f"File {savefile} does not exist at {tempfile_path}. Downloading raw data and converting to lompe data as {savefile}.")
-        with tqdm(total=100, desc=f"Downloading Iridium/AMPERE for {event}") as pbar: 
-            _ = download_iridium_raw(event, basepath=basepath)
+        with tqdm(total=100, desc=f"Retrieving Iridium/AMPERE data for {event}") as pbar: 
+            _ = download_iridium_raw(event, basepath=tempfile_path)
             pbar.update(40)
-            result = read_iridium(event, basepath=basepath, tempfile_path=tempfile_path, pbar=pbar)
+            result = read_iridium(event, basepath=tempfile_path, tempfile_path=tempfile_path, pbar=pbar)
 
         return result

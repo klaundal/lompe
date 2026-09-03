@@ -64,7 +64,7 @@ def download_supermag(
     )
 
     if save and os.path.isfile(savefile):
-        print("SuperMAG file already exists at: ", savefile)
+        print(f"SuperMAG file for {event} already exists at {savefile}")
         return savefile
 
     # start = [int(x) for x in event.split("-")] + [0, 0]
@@ -132,7 +132,7 @@ def download_supermag(
 
         if save:
             df_final.to_hdf(savefile, key="df_final", mode="w")
-            print(f"SuperMAG - Download complete: {savefile}")
+            print(f"SuperMAG download complete: {savefile}")
             return savefile
 
         return df_final
@@ -308,7 +308,7 @@ def _get_supermag_all_stations(
         iterator = tqdm(
             iterator,
             total=len(stations),
-            desc=f"Downloading SuperMAG data for {start}",
+            desc=f"Retrieving SuperMAG data for {start}",
             unit="station",
         )
 

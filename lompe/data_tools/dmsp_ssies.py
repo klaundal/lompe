@@ -39,7 +39,7 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
     savefile = tempfile_path + \
         event.replace('-', '') + '_ssies_f' + str(sat) + '.h5'
     if os.path.exists(savefile):
-        print(f'DMSP/SSIES F{sat} file already exists at {savefile}')
+        print(f'DMSP/SSIES F{sat} file for {event} already exists at {savefile}')
         return savefile
 
     date_str = event.replace('-', '')
@@ -48,7 +48,7 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
     url = url_base + \
         f"/ftp/fullname/{madrigal_kwargs['user_fullname']}/email/{madrigal_kwargs['user_email']}/affiliation/{madrigal_kwargs['user_affiliation']}/kinst/8100/year/{year}/"
 
-    pbar = tqdm(total=100, desc=f"Downloading DMSP/SSIES F{sat} for {event}")
+    pbar = tqdm(total=100, desc=f"Retrieving DMSP/SSIES F{sat} for {event}")
 
     response2 = requests.get(url)
     soup2 = BeautifulSoup(response2.content, 'html.parser')
@@ -185,6 +185,6 @@ def download_dmsp_ssies(event, sat, tempfile_path='./', **madrigal_kwargs):
 
     pbar.update(20)
 
-    print(f"DMSP/SSIES F{sat} - Download complete: {savefile}")
+    print(f"DMSP/SSIES F{sat} download complete: {savefile}")
 
     return savefile

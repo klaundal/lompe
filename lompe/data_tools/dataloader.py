@@ -792,7 +792,7 @@ def read_iridium(event, basepath='./', tempfile_path='./', file_name='', pbar=No
     if pbar:
         pbar.update(pbar.total - pbar.n)
 
-    print(f"Iridium/AMPERE - Download complete: {savefile}")
+    print(f"Iridium/AMPERE download complete: {savefile}")
 
     return savefile
 
