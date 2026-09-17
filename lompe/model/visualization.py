@@ -590,7 +590,8 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
             keyword arguments passed to savefig. If None, the figure will be shown with plt.show()
         clkw: dictionary, optional
             keywords for Polarplot.coastlines(), used to show coastlines in polarplot. Ignored 
-            if apex or time are not specified        
+            if apex or time are not specified 
+        suptitle:TODO!!       
         quiverscales: dict, optional
             dictionary of scales (in inches) to use for quiver plots. keys must be valid datatype. 
             default values are used for datatypes that are not in list of keys
@@ -748,7 +749,7 @@ def lompeplot(model, figheight = 9, include_data = False, show_data_location= Fa
 
     # Finish
     # ------
-    top = np.clip(0.91 - 0.06*(1/ar - 1) - 0.018*np.exp(-((ar - 1.33)/0.18)**2), 0.82, 0.91)
+    top = np.clip(0.82 - 0.06*(1/ar - 1) - 0.018*np.exp(-((ar - 1.33)/0.18)**2), 0.72, 0.91)
     plt.subplots_adjust(top=top, bottom=0.065, left=0.01, right=0.98) 
 
     if savekw != None:
